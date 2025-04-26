@@ -2,6 +2,7 @@ package be.stealingdapenta.coreai.command;
 
 import static net.kyori.adventure.text.format.NamedTextColor.RED;
 
+import be.stealingdapenta.coreai.permission.PermissionNode;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -33,18 +34,22 @@ public class SetApiKeyCommand implements CommandExecutor {
 
     // In-memory map of player UUID -> a decrypted API key
     private static final ConcurrentHashMap<UUID, String> playerKeys = new ConcurrentHashMap<>();
+    private static final String KEY_FILE_NAME = "secret.key";
+    private static final String KEYS_FILE_NAME = "playerkeys.yml";
+    private static final String ENCRYPTION_ALGORITHM = "AES/GCM/NoPadding";
 
     private final Plugin plugin;
     private final CryptoUtil crypto;
     private final File keysFile;
     private final FileConfiguration keysConfig;
 
+
     public SetApiKeyCommand(@NotNull Plugin plugin) {
         this.plugin = plugin;
         plugin.getDataFolder()
               .mkdirs();
-        this.crypto = new CryptoUtil(new File(plugin.getDataFolder(), "secret.key"));
-        this.keysFile = new File(plugin.getDataFolder(), "playerkeys.yml");
+        this.crypto = new CryptoUtil(new File(plugin.getDataFolder(), KEY_FILE_NAME));
+        this.keysFile = new File(plugin.getDataFolder(), KEYS_FILE_NAME);
         this.keysConfig = YamlConfiguration.loadConfiguration(keysFile);
 
         // Load existing encrypted keys
@@ -76,6 +81,12 @@ public class SetApiKeyCommand implements CommandExecutor {
             sender.sendMessage(Component.text("Only players can set their API key.", RED));
             return true;
         }
+
+        if (!player.hasPermission(PermissionNode.SET_API_KEY.node())) {
+            player.sendMessage(Component.text("You don't have permission to set your API key.", RED));
+            return true;
+        }
+
         if (args.length != 1) {
             player.sendMessage(Component.text("Usage: /" + label + " <your-api-key>", RED));
             return true;
@@ -109,7 +120,7 @@ public class SetApiKeyCommand implements CommandExecutor {
      */
     private static class CryptoUtil {
 
-        private static final String ALGO = "AES/GCM/NoPadding";
+        private static final String ALGO = ENCRYPTION_ALGORITHM;
         private static final int KEY_SIZE = 256;
         private static final int TAG_SIZE = 128;
         private static final int IV_SIZE = 12;

@@ -20,9 +20,11 @@ commands:
 
 permissions:
   coreai.setapikey:
-    description: Allows players to set their personal API key
+    description: Allows setting your personal OpenAI API key
     default: true
-
   coreai.chat:
-    description: Allows chatting with the AI
+    description: Allows using /chat to talk with the AI
+    default: true
+  coreai.models:
+    description: Allows selecting the AI model via GUI
     default: true

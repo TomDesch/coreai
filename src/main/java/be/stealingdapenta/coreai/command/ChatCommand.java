@@ -8,6 +8,7 @@ import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
 import static net.kyori.adventure.text.format.NamedTextColor.RED;
 
 import be.stealingdapenta.coreai.CoreAI;
+import be.stealingdapenta.coreai.permission.PermissionNode;
 import be.stealingdapenta.coreai.service.ChatAgent;
 import be.stealingdapenta.coreai.service.ChatAgentFactory;
 import java.util.UUID;
@@ -31,7 +32,7 @@ public class ChatCommand implements CommandExecutor {
             sender.sendMessage(Component.text("Only players can use this command.", RED));
             return true;
         }
-        if (!player.hasPermission("coreai.chat")) {
+        if (!player.hasPermission(PermissionNode.CHAT.node())) {
             player.sendMessage(Component.text("You don't have permission.", RED));
             return true;
         }
