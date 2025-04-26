@@ -68,11 +68,10 @@ public class ChatGPTService {
     }
 
     /**
-     * Sends a full conversation history to the OpenAI Chat API.
+     * Sends a full conversation history to the OpenAI Chat API. On HTTP error, returns the error message from the API, suggesting key setup if needed.
      *
-     * @param messages list of messages (role and content) to include in the context
-     * @return The assistant’s reply
-     * @throws IOException on network or parsing errors
+     * @param messages List of messages in the conversation history.
+     * @return The response from the OpenAI API, or an error message.
      */
     public String sendChat(List<Map<String, Object>> messages) throws IOException {
         Map<String, Object> payload = Map.of("model", model, "messages", messages);
@@ -85,22 +84,33 @@ public class ChatGPTService {
 
         try (Response response = client.newCall(request)
                                        .execute()) {
+            String respBody = response.body() != null ? response.body()
+                                                                .string() : "";
             if (!response.isSuccessful()) {
-                String errBody = response.body() != null ? response.body()
-                                                                   .string() : "";
-                logger.severe("OpenAI Chat API error: HTTP " + response.code() + " - " + errBody);
+                logger.severe("OpenAI Chat API error: HTTP " + response.code() + " - " + respBody);
+                try {
+                    Map<String, Object> errorRoot = mapAdapter.fromJson(respBody);
+                    if (errorRoot != null && errorRoot.get("error") instanceof Map<?, ?> err) {
+                        Object msgObj = err.get("message");
+                        String errMsg = msgObj != null ? msgObj.toString() : "Unknown error";
+                        Object codeObj = err.get("code");
+                        if (codeObj != null && codeObj.toString()
+                                                      .contains("invalid_api_key")) {
+                            errMsg += " To set your API key in CoreAI, use /setapikey <your-api-key>";
+                        }
+                        return errMsg;
+                    }
+                } catch (Exception e) {
+                    // ignore parsing errors
+                }
                 throw new IOException("OpenAI API returned HTTP " + response.code());
             }
 
-            assert response.body() != null;
-            String respJson = response.body()
-                                      .string();
-            Map<String, Object> respMap = mapAdapter.fromJson(respJson);
+            // Successful response
+            Map<String, Object> respMap = mapAdapter.fromJson(respBody);
             if (respMap == null) {
                 throw new IOException("Received empty response from OpenAI");
             }
-
-            // Extract the first choice using a Deque for readability
             Object choicesObj = respMap.get("choices");
             if (!(choicesObj instanceof List<?> choicesList)) {
                 throw new IOException("Unexpected response format: missing choices");
@@ -113,7 +123,6 @@ public class ChatGPTService {
             if (!(firstChoice instanceof Map<?, ?> choiceMap)) {
                 throw new IOException("Unexpected response format: choice is not an object");
             }
-
             Object messageObj = choiceMap.get("message");
             if (!(messageObj instanceof Map<?, ?> messageMap)) {
                 throw new IOException("Unexpected response format: missing message");
