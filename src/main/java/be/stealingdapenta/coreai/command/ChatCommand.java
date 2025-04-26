@@ -52,7 +52,9 @@ public class ChatCommand implements CommandExecutor {
         }
 
         String prompt = String.join(" ", args);
-        player.sendMessage(ChatColor.GRAY + "[CoreAI] Thinking...");
+
+        player.sendMessage(ChatColor.GRAY + "[CoreAI] [Prompted:] " + prompt);
+        player.sendMessage(ChatColor.DARK_GRAY + "[CoreAI] Thinking...");
 
         UUID uuid = player.getUniqueId();
         // Initialize history for player if absent
