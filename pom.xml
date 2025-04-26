@@ -53,7 +53,6 @@
   </dependencies>
 
   <build>
-    <defaultGoal>clean package</defaultGoal>
     <plugins>
       <!-- Compiler plugin -->
       <plugin>
@@ -66,64 +65,80 @@
         </configuration>
       </plugin>
 
-      <!-- Shade plugin -->
+      <!-- Shade plugin: runs on both package and install phases -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
         <version>3.5.3</version>
+        <configuration>
+          <!-- Relocations -->
+          <createDependencyReducedPom>false</createDependencyReducedPom>
+          <!-- Filters: exclude metadata only -->
+          <filters>
+            <filter>
+              <artifact>*:*</artifact>
+              <excludes>
+                <exclude>META-INF/okio.kotlin_module</exclude>
+                <exclude>META-INF/versions/**</exclude>
+                <exclude>META-INF/MANIFEST.MF</exclude>
+                <exclude>META-INF/*.kotlin_module</exclude>
+                <exclude>**/*.kotlin_metadata</exclude>
+                <exclude>META-INF/proguard/**</exclude>
+              </excludes>
+            </filter>
+          </filters>
+          <relocations>
+            <relocation>
+              <pattern>okhttp3</pattern>
+              <shadedPattern>be.stealingdapenta.coreai.shaded.okhttp3</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>okio</pattern>
+              <shadedPattern>be.stealingdapenta.coreai.shaded.okio</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>com.squareup.moshi</pattern>
+              <shadedPattern>be.stealingdapenta.coreai.shaded.moshi</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>kotlin</pattern>
+              <shadedPattern>be.stealingdapenta.coreai.shaded.kotlin</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.intellij.lang.annotations</pattern>
+              <shadedPattern>be.stealingdapenta.coreai.shaded.intellij.annotations</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.jetbrains.annotations</pattern>
+              <shadedPattern>be.stealingdapenta.coreai.shaded.jetbrains.annotations</shadedPattern>
+            </relocation>
+          </relocations>
+          <transformers>
+            <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+              <mainClass>be.stealingdapenta.coreai.CoreAI</mainClass>
+            </transformer>
+          </transformers>
+        </configuration>
         <executions>
+          <!-- Package phase execution -->
           <execution>
+            <id>shade-on-package</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
             </goals>
-            <configuration>
-              <!-- Relocations -->
-              <relocations>
-                <relocation>
-                  <pattern>okhttp3</pattern>
-                  <shadedPattern>be.stealingdapenta.coreai.shaded.okhttp3</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>okio</pattern>
-                  <shadedPattern>be.stealingdapenta.coreai.shaded.okio</shadedPattern>
-                </relocation>
-              </relocations>
-
-              <!-- Filters: exclude duplicate metadata and Kotlin/annotations/Moshi classes -->
-              <filters>
-                <filter>
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <!-- META-INF duplicates -->
-                    <exclude>META-INF/okio.kotlin_module</exclude>
-                    <exclude>META-INF/versions/**</exclude>
-                    <exclude>META-INF/MANIFEST.MF</exclude>
-                    <exclude>META-INF/*.kotlin_module</exclude>
-                    <exclude>**/*.kotlin_metadata</exclude>
-                    <exclude>META-INF/proguard/**</exclude>
-                    <!-- Annotation and Kotlin classes -->
-                    <exclude>org/intellij/lang/annotations/**</exclude>
-                    <exclude>kotlin/**</exclude>
-                    <!-- Moshi metadata -->
-                    <exclude>com/squareup/moshi/**</exclude>
-                  </excludes>
-                </filter>
-              </filters>
-
-              <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>be.stealingdapenta.coreai.CoreAI</mainClass>
-                </transformer>
-              </transformers>
-
-              <createDependencyReducedPom>false</createDependencyReducedPom>
-            </configuration>
+          </execution>
+          <!-- Install phase execution to ensure shading on installation -->
+          <execution>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <id>shade-on-install</id>
+            <phase>install</phase>
           </execution>
         </executions>
       </plugin>
     </plugins>
-
     <resources>
       <!-- plugin.yml unfiltered -->
       <resource>
