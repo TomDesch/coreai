@@ -6,7 +6,6 @@ import static be.stealingdapenta.coreai.config.Config.MODEL;
 import static be.stealingdapenta.coreai.config.Config.TIMEOUT_MS;
 
 import be.stealingdapenta.coreai.CoreAI;
-import be.stealingdapenta.coreai.command.SetApiKeyCommand;
 import be.stealingdapenta.coreai.service.ChatAgent;
 import java.io.File;
 import java.io.IOException;
@@ -33,7 +32,8 @@ public enum SessionManager implements Listener {
     private static final String OVERRIDES_FILENAME = "player_models.yml";
 
     private final Map<UUID, ChatAgent> agents = new ConcurrentHashMap<>();
-    private final Map<UUID, String> modelOverrides = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, String> playerKeys = new ConcurrentHashMap<>();
+    private final Map<UUID, String> playerChosenModels = new ConcurrentHashMap<>();
 
     private File overridesFile;
     private FileConfiguration overridesConfig;
@@ -59,7 +59,7 @@ public enum SessionManager implements Listener {
                 UUID id = UUID.fromString(key);
                 String model = overridesConfig.getString(key);
                 if (model != null) {
-                    modelOverrides.put(id, model);
+                    playerChosenModels.put(id, model);
                 }
             } catch (IllegalArgumentException ignore) {
             }
@@ -76,12 +76,8 @@ public enum SessionManager implements Listener {
      */
     public ChatAgent getAgent(UUID uuid) {
         return agents.computeIfAbsent(uuid, id -> {
-            String apiKey = SetApiKeyCommand.getKey(id);
-            if (apiKey == null || apiKey.isBlank()) {
-                // Use the default API key if none is set
-                apiKey = API_KEY.get();
-            }
-            String model = modelOverrides.getOrDefault(id, MODEL.get());
+            String apiKey = playerKeys.getOrDefault(id, API_KEY.get());
+            String model = playerChosenModels.getOrDefault(id, MODEL.get());
             int timeout = TIMEOUT_MS.get();
             return new ChatAgent(id, apiKey, model, timeout);
         });
@@ -94,12 +90,26 @@ public enum SessionManager implements Listener {
      * @param model Model ID chosen
      */
     public void setPlayerModel(UUID uuid, String model) {
-        modelOverrides.put(uuid, model);
+        playerChosenModels.put(uuid, model);
+        ChatAgent agent = agents.get(uuid);
+        if (agent != null) {
+            agent.setModel(model);
+        }
+
+        // save to disk
         overridesConfig.set(uuid.toString(), model);
         try {
             overridesConfig.save(overridesFile);
         } catch (IOException e) {
             CORE_AI_LOGGER.severe("Failed to save " + OVERRIDES_FILENAME + ": " + e.getMessage());
+        }
+    }
+
+    public void setPlayerAPIKey(UUID uuid, String apiKey) {
+        playerKeys.put(uuid, apiKey);
+        ChatAgent agent = agents.get(uuid);
+        if (agent != null) {
+            agent.setApiKey(apiKey);
         }
     }
 

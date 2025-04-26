@@ -11,10 +11,5 @@ public final class Config {
     public static final ConfigValue<String> MODEL = new ConfigValue<>("openai.model", "gpt-3.5-turbo", FileConfiguration::getString);
     public static final ConfigValue<Integer> TIMEOUT_MS = new ConfigValue<>("openai.timeout-ms", 60_000, FileConfiguration::getInt);
 
-    private static FileConfiguration cfg() {
-        return be.stealingdapenta.coreai.CoreAI.getInstance()
-                                               .getConfig();
-    }
-
     // add more settings here...
 }

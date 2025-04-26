@@ -28,10 +28,6 @@ public class ChatAgent {
         this.timeoutMs = timeoutMs;
     }
 
-    public String getModel() {
-        return model;
-    }
-
     public void setModel(String model) {
         this.model = model;
     }

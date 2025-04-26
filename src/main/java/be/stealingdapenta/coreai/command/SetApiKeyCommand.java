@@ -1,8 +1,7 @@
 package be.stealingdapenta.coreai.command;
 
 import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
-import static be.stealingdapenta.coreai.config.Config.API_KEY;
-import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
+import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 import static net.kyori.adventure.text.format.NamedTextColor.RED;
 
 import be.stealingdapenta.coreai.CoreAI;
@@ -13,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -22,7 +20,6 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -38,14 +35,13 @@ import org.jetbrains.annotations.NotNull;
 public class SetApiKeyCommand implements CommandExecutor {
 
     // In-memory map of player UUID -> a decrypted API key
-    private static final ConcurrentHashMap<UUID, String> playerKeys = new ConcurrentHashMap<>();
     private static final String KEY_FILE_NAME = "secret.key";
     private static final String KEYS_FILE_NAME = "playerkeys.yml";
     private static final String ENCRYPTION_ALGORITHM = "AES/GCM/NoPadding";
 
     private final CryptoUtil crypto;
     private final File keysFile;
-    private final FileConfiguration keysConfig;
+    private final FileConfiguration keysConfig; // todo move to SessionManager
 
     /**
      * Constructor: initializes the encryption utility and loads existing keys from disk.
@@ -69,7 +65,7 @@ public class SetApiKeyCommand implements CommandExecutor {
 
             try {
                 String decrypted = crypto.decrypt(encrypted);
-                playerKeys.put(UUID.fromString(uuidStr), decrypted);
+                SESSION_MANAGER.setPlayerAPIKey(UUID.fromString(uuidStr), decrypted);
             } catch (Exception e) {
                 CORE_AI_LOGGER.log(Level.SEVERE, Component.text("Failed to decrypt API key for player " + uuidStr, RED)
                                                           .toString(), e);
@@ -77,21 +73,7 @@ public class SetApiKeyCommand implements CommandExecutor {
         }
     }
 
-    /**
-     * Retrieve the stored API key for a player, or fallback to the server default.
-     */
-    public static String getKey(UUID playerUuid) {
-        String key = playerKeys.get(playerUuid);
-        if (key == null || key.isBlank()) {
-            // fallback to server default
-            Player player = Bukkit.getPlayer(playerUuid);
-            if (player != null) {
-                player.sendMessage(Component.text("No API key set, using server default.", GRAY));
-            }
-            return API_KEY.get();
-        }
-        return key;
-    }
+
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String @NotNull [] args) {
@@ -111,7 +93,7 @@ public class SetApiKeyCommand implements CommandExecutor {
         }
 
         String apiKey = args[0].trim();
-        playerKeys.put(player.getUniqueId(), apiKey);
+        SESSION_MANAGER.setPlayerAPIKey(player.getUniqueId(), apiKey);
 
         // Encrypt and save to disk
         String encrypted = crypto.encrypt(apiKey);

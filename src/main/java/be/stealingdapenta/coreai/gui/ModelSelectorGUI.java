@@ -1,13 +1,10 @@
 package be.stealingdapenta.coreai.gui;
 
-import static be.stealingdapenta.coreai.config.Config.TIMEOUT_MS;
 import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 import static net.kyori.adventure.text.format.NamedTextColor.AQUA;
 import static net.kyori.adventure.text.format.NamedTextColor.GOLD;
 import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
 
-import be.stealingdapenta.coreai.command.SetApiKeyCommand;
-import be.stealingdapenta.coreai.service.ChatAgentFactory;
 import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -79,8 +76,6 @@ public class ModelSelectorGUI implements Listener {
         String selectedModel = PlainTextComponentSerializer.plainText()
                                                            .serialize(nameComp);
 
-        // Retrieve or create the agent with server defaults
-        ChatAgentFactory.getAgent(player.getUniqueId(), SetApiKeyCommand.getKey(player.getUniqueId()), selectedModel, TIMEOUT_MS.get());
         SESSION_MANAGER.setPlayerModel(player.getUniqueId(), selectedModel);
 
         player.closeInventory();

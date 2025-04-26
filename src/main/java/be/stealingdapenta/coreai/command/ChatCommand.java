@@ -67,9 +67,12 @@ public class ChatCommand implements CommandExecutor {
                                 }
                             });
 
-                      CORE_AI_LOGGER.warning("===================");
-                      CORE_AI_LOGGER.warning("The agent: " + agent.toString());
-                      CORE_AI_LOGGER.warning("All information from this command: " + oae.getMessage() + " " + oae.getCode());
+                      CORE_AI_LOGGER.warning("======================================");
+                      CORE_AI_LOGGER.warning("The agent: " + agent);
+                      CORE_AI_LOGGER.warning("The prompt: " + prompt);
+                      CORE_AI_LOGGER.warning("The error code: " + oae.getCode());
+                      CORE_AI_LOGGER.warning("The error: " + oae.getMessage());
+                      CORE_AI_LOGGER.warning("======================================");
                   } catch (IOException ioe) {
                       // generic network/parsing error -> also on the main thread
                       CoreAI.getInstance()
