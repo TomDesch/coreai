@@ -3,6 +3,7 @@ package be.stealingdapenta.coreai.gui;
 import static be.stealingdapenta.coreai.config.Config.API_KEY;
 import static be.stealingdapenta.coreai.config.Config.MODEL;
 import static be.stealingdapenta.coreai.config.Config.TIMEOUT_MS;
+import static net.kyori.adventure.text.format.NamedTextColor.AQUA;
 import static net.kyori.adventure.text.format.NamedTextColor.GOLD;
 import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
 
@@ -10,7 +11,6 @@ import be.stealingdapenta.coreai.service.ChatAgent;
 import be.stealingdapenta.coreai.service.ChatAgentFactory;
 import java.util.List;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -29,7 +29,8 @@ import org.jetbrains.annotations.NotNull;
  */
 public class ModelSelectorGUI implements Listener {
 
-    private static final Component TITLE = Component.text("Select AI Model", NamedTextColor.AQUA);
+    private static final String INVENTORY_TITLE = "Select AI Model";
+    private static final Component TITLE_COMPONENT = Component.text(INVENTORY_TITLE, AQUA);
     private static final int SLOTS_PER_ROW = 9;
 
     /**
@@ -38,7 +39,7 @@ public class ModelSelectorGUI implements Listener {
     public void openModelGui(@NotNull Player player, @NotNull List<String> models) {
         int rows = (models.size() + SLOTS_PER_ROW - 1) / SLOTS_PER_ROW;
         int size = rows * SLOTS_PER_ROW;
-        Inventory inv = Bukkit.createInventory(null, size, TITLE);
+        Inventory inv = Bukkit.createInventory(null, size, TITLE_COMPONENT);
 
         for (int i = 0; i < models.size(); i++) {
             String modelId = models.get(i);
@@ -62,7 +63,7 @@ public class ModelSelectorGUI implements Listener {
         }
         InventoryView view = event.getView();
         if (!view.title()
-                 .equals(TITLE)) {
+                 .equals(TITLE_COMPONENT)) {
             return;
         }
         event.setCancelled(true);
@@ -75,6 +76,7 @@ public class ModelSelectorGUI implements Listener {
         // Extract plain text from the Component display name
         Component nameComp = clicked.getItemMeta()
                                     .displayName();
+        assert nameComp != null;
         String selectedModel = PlainTextComponentSerializer.plainText()
                                                            .serialize(nameComp);
 
