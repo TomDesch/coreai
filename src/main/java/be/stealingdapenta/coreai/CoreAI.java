@@ -25,8 +25,7 @@ public class CoreAI extends JavaPlugin {
         saveDefaultConfig();
         CORE_AI_LOGGER = this.getLogger();
 
-        // Colored enable banner
-        CORE_AI_LOGGER.info(ANSI_YELLOW + "[CoreAI] Enabling CoreAI" + ANSI_RESET);
+        CORE_AI_LOGGER.info(ANSI_YELLOW + "Enabling CoreAI" + ANSI_RESET);
 
         // Load an API key strictly from config.yml
         String openAiKey = getConfig().getString("openai.api-key", "")
@@ -34,10 +33,7 @@ public class CoreAI extends JavaPlugin {
 
         // Validate API key
         if (openAiKey.isEmpty()) {
-            CORE_AI_LOGGER.severe(ANSI_RED + "[CoreAI] No OpenAI API key set! Please fill openai.api-key in config.yml, or have players specify them individually!" + ANSI_RESET);
-            getServer().getPluginManager()
-                       .disablePlugin(this);
-            return;
+            CORE_AI_LOGGER.severe(ANSI_RED + "No OpenAI API key set! Please fill openai.api-key in config.yml, or have players specify them individually!" + ANSI_RESET);
         }
 
         // Register commands with proper executors
