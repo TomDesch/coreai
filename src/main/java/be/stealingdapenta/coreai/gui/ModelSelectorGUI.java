@@ -21,23 +21,29 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Inventory GUI listener for model selection.
+ * Inventory GUI listener for model selection, with size capped at 54 slots.
  */
 public class ModelSelectorGUI implements Listener {
 
     private static final String INVENTORY_TITLE = "Select AI Model";
     private static final Component TITLE_COMPONENT = Component.text(INVENTORY_TITLE, AQUA);
     private static final int SLOTS_PER_ROW = 9;
+    private static final int MAX_SLOTS = 54;
 
     /**
      * Opens the model-selection inventory for a player.
+     * Caps size to maximum allowed slots (54).
      */
     public void openModelGui(@NotNull Player player, @NotNull List<String> models) {
-        int rows = (models.size() + SLOTS_PER_ROW - 1) / SLOTS_PER_ROW;
+        // Calculate the necessary rows, cap at 6 (54 slots)
+        int rowsNeeded = (models.size() + SLOTS_PER_ROW - 1) / SLOTS_PER_ROW;
+        int rows = Math.min(rowsNeeded, MAX_SLOTS / SLOTS_PER_ROW);
         int size = rows * SLOTS_PER_ROW;
         Inventory inv = Bukkit.createInventory(null, size, TITLE_COMPONENT);
 
-        for (int i = 0; i < models.size(); i++) {
+        // Only display up to 'size' models
+        int displayCount = Math.min(models.size(), size);
+        for (int i = 0; i < displayCount; i++) {
             String modelId = models.get(i);
             ItemStack item = new ItemStack(Material.PAPER);
             ItemMeta meta = item.getItemMeta();
@@ -69,13 +75,15 @@ public class ModelSelectorGUI implements Listener {
             return;
         }
 
-        // Extract plain text from the Component display name
         Component nameComp = clicked.getItemMeta()
                                     .displayName();
-        assert nameComp != null;
+        if (nameComp == null) {
+            return;
+        }
         String selectedModel = PlainTextComponentSerializer.plainText()
                                                            .serialize(nameComp);
 
+        // Persist the selection
         SESSION_MANAGER.setPlayerModel(player.getUniqueId(), selectedModel);
 
         player.closeInventory();
