@@ -1,7 +1,11 @@
 package be.stealingdapenta.coreai;
 
+import static be.stealingdapenta.coreai.config.Config.API_KEY;
+
 import be.stealingdapenta.coreai.command.ChatCommand;
+import be.stealingdapenta.coreai.command.ModelCommand;
 import be.stealingdapenta.coreai.command.SetApiKeyCommand;
+import be.stealingdapenta.coreai.gui.ModelSelectorGUI;
 import java.util.Objects;
 import java.util.logging.Logger;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -31,27 +35,36 @@ public class CoreAI extends JavaPlugin {
 
         // Ensure default config is created
         saveDefaultConfig();
-        CORE_AI_LOGGER = this.getLogger();
 
+        CORE_AI_LOGGER = this.getLogger();
         CORE_AI_LOGGER.info(ANSI_YELLOW + "Enabling CoreAI" + ANSI_RESET);
 
-        // Load an API key strictly from config.yml
-        String openAiKey = getConfig().getString("openai.api-key", "")
-                                      .trim();
+        validateDefaultAPIKey();
 
-        // Validate API key
-        if (openAiKey.isEmpty()) {
-            CORE_AI_LOGGER.severe(ANSI_RED + "No OpenAI API key set! Please fill openai.api-key in config.yml, or have players specify them individually!" + ANSI_RESET);
-        }
+        // Register events
+        ModelSelectorGUI gui = new ModelSelectorGUI();
+        getServer().getPluginManager()
+                   .registerEvents(gui, this);
 
         // Register commands with proper executors
         Objects.requireNonNull(getCommand("chat"))
                .setExecutor(new ChatCommand());
         Objects.requireNonNull(getCommand("setapikey"))
                .setExecutor(new SetApiKeyCommand(this));
+        getCommand("models").setExecutor(new ModelCommand(gui));
+
+
+
 
         // Colored ready message
         CORE_AI_LOGGER.info(ANSI_GREEN + "CoreAI ready to roll!" + ANSI_RESET);
+    }
+
+    private void validateDefaultAPIKey() {
+        if (API_KEY.get()
+                   .isEmpty()) {
+            CORE_AI_LOGGER.severe(ANSI_RED + "No OpenAI API key set! Please fill openai.api-key in config.yml, or have players specify them individually!" + ANSI_RESET);
+        }
     }
 
     @Override
