@@ -1,0 +1,9 @@
+name: CoreAI
+version: '1.0-SNAPSHOT'
+main: be.stealingdapenta.coreAI.CoreAI
+api-version: '1.21'
+prefix: CoreAI
+load: STARTUP
+authors: [ StealingDaPenta ]
+description: An extensible, AI-powered Minecraft toolkit that brings in-game image generation, chat intelligence, and more to your server.
+website: www.stealingdapenta.be
