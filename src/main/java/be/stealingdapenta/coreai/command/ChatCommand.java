@@ -1,6 +1,5 @@
 package be.stealingdapenta.coreai.command;
 
-import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
 import static be.stealingdapenta.coreai.config.Config.API_KEY;
 import static be.stealingdapenta.coreai.config.Config.MODEL;
 import static be.stealingdapenta.coreai.config.Config.TIMEOUT_MS;
@@ -12,7 +11,6 @@ import be.stealingdapenta.coreai.permission.PermissionNode;
 import be.stealingdapenta.coreai.service.ChatAgent;
 import be.stealingdapenta.coreai.service.ChatAgentFactory;
 import java.util.UUID;
-import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
@@ -71,11 +69,21 @@ public class ChatCommand implements CommandExecutor {
                             .getScheduler()
                             .runTask(CoreAI.getInstance(), () -> player.sendMessage(Component.text("[CoreAI] " + response, GREEN)));
                   } catch (Exception e) {
+
                       CoreAI.getInstance()
                             .getServer()
                             .getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(Component.text("[CoreAI] Error: " + e.getMessage(), RED)));
-                      CORE_AI_LOGGER.log(Level.SEVERE, "Error in ChatCommand", e);
+                            .runTask(CoreAI.getInstance(), () -> {
+                                if (e.getMessage()
+                                     .contains("Incorrect API key")) {
+                                    player.sendMessage(Component.text("[CoreAI] Error: Incorrect API key. Please set your API key using /setapikey <key>", RED));
+                                } else if (e.getMessage()
+                                            .contains("Model not found")) {
+                                    player.sendMessage(Component.text("[CoreAI] Error: Model not found. Please select a valid model.", RED));
+                                } else {
+                                    player.sendMessage(Component.text("[CoreAI] Error: " + e.getMessage(), RED));
+                                }
+                            });
                   }
               });
 
