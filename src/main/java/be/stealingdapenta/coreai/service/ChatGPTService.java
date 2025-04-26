@@ -5,6 +5,8 @@ import com.squareup.moshi.Moshi;
 import com.squareup.moshi.Types;
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.util.Deque;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -44,7 +46,6 @@ public class ChatGPTService {
                                                 .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
                                                 .build();
 
-        // Define the generic Map<String, Object> type for Moshi
         Type mapType = Types.newParameterizedType(Map.class, String.class, Object.class);
         this.mapAdapter = new Moshi.Builder().build()
                                              .adapter(mapType);
@@ -52,19 +53,26 @@ public class ChatGPTService {
 
     /**
      * Sends a user prompt to the OpenAI Chat API and returns the assistant's reply.
-     *
      * @param userPrompt The prompt text from the user
      * @return The assistant's response text
      * @throws IOException If network or parsing errors occur
      */
     public String sendMessage(String userPrompt) throws IOException {
-        // Build request payload
         Map<String, Object> message = Map.of("role", "user", "content", userPrompt);
-        Map<String, Object> payload = Map.of("model", model, "messages", List.of(message));
+        return sendChat(List.of(message));
+    }
 
+    /**
+     * Sends a full conversation history to the OpenAI Chat API.
+     *
+     * @param messages list of messages (role and content) to include in the context
+     * @return The assistant’s reply
+     * @throws IOException on network or parsing errors
+     */
+    public String sendChat(List<Map<String, Object>> messages) throws IOException {
+        Map<String, Object> payload = Map.of("model", model, "messages", messages);
         String jsonPayload = mapAdapter.toJson(payload);
         RequestBody body = RequestBody.create(jsonPayload, MediaType.get("application/json; charset=utf-8"));
-
         Request request = new Request.Builder().url(OPENAI_CHAT_URL)
                                                .addHeader("Authorization", "Bearer " + apiKey)
                                                .post(body)
@@ -79,6 +87,7 @@ public class ChatGPTService {
                 throw new IOException("OpenAI API returned HTTP " + response.code());
             }
 
+            assert response.body() != null;
             String respJson = response.body()
                                       .string();
             Map<String, Object> respMap = mapAdapter.fromJson(respJson);
@@ -86,18 +95,20 @@ public class ChatGPTService {
                 throw new IOException("Received empty response from OpenAI");
             }
 
-            // Extract the first choice's message content
+            // Extract the first choice using a Deque for thread-safety and readability
             Object choicesObj = respMap.get("choices");
-            if (!(choicesObj instanceof List<?> choices)) {
+            if (!(choicesObj instanceof List<?> choicesList)) {
                 throw new IOException("Unexpected response format: missing choices");
             }
-            if (choices.isEmpty()) {
+            Deque<?> choicesDeque = new LinkedList<>(choicesList);
+            if (choicesDeque.isEmpty()) {
                 throw new IOException("No choices returned from OpenAI");
             }
-            Object firstChoice = choices.getFirst();
+            Object firstChoice = choicesDeque.getFirst();
             if (!(firstChoice instanceof Map<?, ?> choiceMap)) {
                 throw new IOException("Unexpected response format: choice is not an object");
             }
+
             Object messageObj = choiceMap.get("message");
             if (!(messageObj instanceof Map<?, ?> messageMap)) {
                 throw new IOException("Unexpected response format: missing message");
