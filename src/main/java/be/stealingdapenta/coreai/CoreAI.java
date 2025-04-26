@@ -1,6 +1,8 @@
 package be.stealingdapenta.coreai;
 
+import be.stealingdapenta.coreai.command.ChatCommand;
 import be.stealingdapenta.coreai.service.ChatGPTService;
+import java.util.logging.Logger;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class CoreAI extends JavaPlugin {
@@ -8,11 +10,13 @@ public class CoreAI extends JavaPlugin {
     private String openAiKey;
     private String openAiModel;
     private int openAiTimeout;
+    public static Logger CORE_AI_LOGGER;
 
     @Override
     public void onEnable() {
         // 1) Ensure the default config.yml is created
         saveDefaultConfig();
+        CORE_AI_LOGGER = this.getLogger();
 
         // 2) Load values (with sensible defaults/fallbacks)
         openAiKey = getConfig().getString("openai.api-key", "")
@@ -35,11 +39,13 @@ public class CoreAI extends JavaPlugin {
             return;
         }
 
-        // 5) Now you can pass openAiKey/openAiModel/openAiTimeout
-        //    into your ChatGPTService (that you’ll build next).
+        // 5) Initialize ChatGPT service
         ChatGPTService chatService = new ChatGPTService(openAiKey, openAiModel, openAiTimeout, getLogger());
 
-        // …register commands, listeners, etc., handing them chatService…
+        // Register commands
+        getCommand("chat").setExecutor(new ChatCommand(this, chatService));
+        // TODO: register setapikey when implemented
+
         getLogger().info("CoreAI ready to roll!");
     }
 }

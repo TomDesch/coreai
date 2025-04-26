@@ -3,7 +3,7 @@ version: '1.0-SNAPSHOT'
 main: be.stealingdapenta.coreai.CoreAI
 api-version: '1.21.5'
 load: STARTUP
-authors: [ StealingDaPenta ]
+authors: [StealingDaPenta]
 description: An extensible, AI-powered Minecraft toolkit that brings in-game image generation, chat intelligence, and more to your server.
 website: https://www.stealingdapenta.be
 
@@ -12,6 +12,17 @@ commands:
     description: Set your OpenAI API key (operator only)
     usage: /<command> <key>
     permission: coreai.setapikey
+
+  chat:
+    description: Chat with the AI
+    usage: /<command> <message>
+    permission: coreai.chat
+
 permissions:
   coreai.setapikey:
+    description: Allows setting the OpenAI API key
     default: op
+
+  coreai.chat:
+    description: Allows chatting with the AI
+    default: true
