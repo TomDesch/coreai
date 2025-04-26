@@ -38,7 +38,7 @@ public class ChatCommand implements CommandExecutor {
         }
 
         String prompt = String.join(" ", args);
-        player.sendMessage(Component.text(prompt, GRAY));
+        player.sendMessage(Component.text("[%s] %s".formatted(player.getName(), prompt), GRAY));
         player.sendMessage(Component.text("[CoreAI] Thinking...", DARK_GRAY));
         UUID uuid = player.getUniqueId();
 
