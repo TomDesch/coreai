@@ -5,8 +5,8 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>be.stealingdapenta</groupId>
-  <artifactId>coreai</artifactId>
-  <version>1.0-SNAPSHOT</version>
+  <artifactId>CoreAI</artifactId>
+  <version>1.0</version>
   <packaging>jar</packaging>
 
   <name>CoreAI</name>

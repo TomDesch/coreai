@@ -46,6 +46,15 @@ public class CoreAI extends JavaPlugin {
         getCommand("chat").setExecutor(new ChatCommand(this, chatService));
         // TODO: register setapikey when implemented
 
-        getLogger().info("CoreAI ready to roll!");
+        CORE_AI_LOGGER.info("=====================");
+        CORE_AI_LOGGER.info("CoreAI ready to roll!");
+        CORE_AI_LOGGER.info("=====================");
+    }
+
+    @Override
+    public void onDisable() {
+
+        super.onDisable();
+        CORE_AI_LOGGER.info("CoreAI is now disabled.");
     }
 }
