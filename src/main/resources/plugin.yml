@@ -6,3 +6,12 @@ load: STARTUP
 authors: [ StealingDaPenta ]
 description: An extensible, AI-powered Minecraft toolkit that brings in-game image generation, chat intelligence, and more to your server.
 website: https://www.stealingdapenta.be
+
+commands:
+  setapikey:
+    description: Set your OpenAI API key (operator only)
+    usage: /<command> <key>
+    permission: coreai.setapikey
+permissions:
+  coreai.setapikey:
+    default: op

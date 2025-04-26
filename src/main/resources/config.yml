@@ -1,0 +1,5 @@
+# config.yml
+openai:
+  api-key: "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"           # ← Paste your key here (or leave blank and set via env)
+  model: "gpt-3.5-turbo" # default ChatGPT model
+  timeout-ms: 60000      # how long to wait for a response
