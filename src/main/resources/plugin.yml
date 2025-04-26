@@ -9,7 +9,7 @@ website: https://www.stealingdapenta.be
 
 commands:
   setapikey:
-    description: Set your OpenAI API key (operator only)
+    description: Set your OpenAI API key (player-specific, encrypted)
     usage: /<command> <key>
     permission: coreai.setapikey
 
@@ -20,8 +20,8 @@ commands:
 
 permissions:
   coreai.setapikey:
-    description: Allows setting the OpenAI API key
-    default: op
+    description: Allows players to set their personal API key
+    default: true
 
   coreai.chat:
     description: Allows chatting with the AI

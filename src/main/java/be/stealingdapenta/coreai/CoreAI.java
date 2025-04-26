@@ -1,60 +1,57 @@
 package be.stealingdapenta.coreai;
 
 import be.stealingdapenta.coreai.command.ChatCommand;
+import be.stealingdapenta.coreai.command.SetApiKeyCommand;
 import be.stealingdapenta.coreai.service.ChatGPTService;
+import java.util.Objects;
 import java.util.logging.Logger;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class CoreAI extends JavaPlugin {
 
-    private String openAiKey;
-    private String openAiModel;
-    private int openAiTimeout;
     public static Logger CORE_AI_LOGGER;
 
     @Override
     public void onEnable() {
-        // 1) Ensure the default config.yml is created
+        // Ensure default config is created
         saveDefaultConfig();
         CORE_AI_LOGGER = this.getLogger();
 
-        // 2) Load values (with sensible defaults/fallbacks)
-        openAiKey = getConfig().getString("openai.api-key", "")
-                               .trim();
-        openAiModel = getConfig().getString("openai.model", "gpt-3.5-turbo");
-        openAiTimeout = getConfig().getInt("openai.timeout-ms", 60000);
+        // Load config values
+        String openAiKey = getConfig().getString("openai.api-key", "")
+                                      .trim();
+        String openAiModel = getConfig().getString("openai.model", "gpt-3.5-turbo");
+        int openAiTimeout = getConfig().getInt("openai.timeout-ms", 60000);
 
-        // 3) Optionally override with an environment variable
+        // Override from environment if present
         String envKey = System.getenv("OPENAI_API_KEY");
         if (envKey != null && !envKey.isBlank()) {
             openAiKey = envKey.trim();
-            getLogger().info("Using OpenAI key from environment");
+            CORE_AI_LOGGER.info("Using OpenAI key from environment");
         }
 
-        // 4) Validate
+        // Validate API key
         if (openAiKey.isEmpty()) {
-            getLogger().severe("No OpenAI API key set! " + "Please either fill openai.api-key in config.yml or set the OPENAI_API_KEY env var.");
+            CORE_AI_LOGGER.severe("No OpenAI API key set! Please fill openai.api-key in config.yml or set OPENAI_API_KEY env var.");
             getServer().getPluginManager()
                        .disablePlugin(this);
             return;
         }
 
-        // 5) Initialize ChatGPT service
-        ChatGPTService chatService = new ChatGPTService(openAiKey, openAiModel, openAiTimeout, getLogger());
+        // Initialize ChatGPT service
+        ChatGPTService chatService = new ChatGPTService(openAiKey, openAiModel, openAiTimeout, CORE_AI_LOGGER);
 
         // Register commands
-        getCommand("chat").setExecutor(new ChatCommand(this, chatService));
-        // TODO: register setapikey when implemented
+        Objects.requireNonNull(getCommand("chat"))
+               .setExecutor(new ChatCommand(this, chatService));
+        Objects.requireNonNull(getCommand("setapikey"))
+               .setExecutor(new SetApiKeyCommand(this));
 
-        CORE_AI_LOGGER.info("=====================");
         CORE_AI_LOGGER.info("CoreAI ready to roll!");
-        CORE_AI_LOGGER.info("=====================");
     }
 
     @Override
     public void onDisable() {
-
-        super.onDisable();
-        CORE_AI_LOGGER.info("CoreAI is now disabled.");
+        CORE_AI_LOGGER.info("CoreAI disabled.");
     }
 }
