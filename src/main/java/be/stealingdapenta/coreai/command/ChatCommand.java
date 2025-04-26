@@ -61,14 +61,14 @@ public class ChatCommand implements CommandExecutor {
         // Create user message entry
         Map<String, Object> userMsg = Map.of("role", "user", "content", prompt);
 
-        // Update history on main thread
+        // Update history on the main thread
         history.addLast(userMsg);
         // Trim oldest if exceeding max pairs
         while (history.size() > MAX_HISTORY_PAIRS * 2) {
             history.removeFirst();
         }
 
-        // Copy context for use in async task
+        // Copy context for use in an async task
         List<Map<String, Object>> context = new ArrayList<>(history);
 
         // Perform API call asynchronously
@@ -82,7 +82,7 @@ public class ChatCommand implements CommandExecutor {
                       plugin.getServer()
                             .getScheduler()
                             .runTask(plugin, () -> {
-                                // Append assistant message to history
+                                // Append an assistant message to history
                                 Map<String, Object> assistantMsg = Map.of("role", "assistant", "content", response);
                                 history.addLast(assistantMsg);
                                 while (history.size() > MAX_HISTORY_PAIRS * 2) {
