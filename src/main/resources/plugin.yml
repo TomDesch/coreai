@@ -18,6 +18,11 @@ commands:
     usage: /<command> <message>
     permission: coreai.chat
 
+  models:
+    description: Select the AI model to use
+    usage: /<command> <model>
+    permission: coreai.models
+
 permissions:
   coreai.setapikey:
     description: Allows setting your personal OpenAI API key

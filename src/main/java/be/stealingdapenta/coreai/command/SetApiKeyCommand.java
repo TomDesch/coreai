@@ -47,12 +47,8 @@ public class SetApiKeyCommand implements CommandExecutor {
 
     public SetApiKeyCommand() {
         Plugin plugin = CoreAI.getInstance();
-        boolean filesMade = plugin.getDataFolder()
+        plugin.getDataFolder()
               .mkdirs();
-
-        if (!filesMade) {
-            throw new IllegalStateException("Couldn't create the keys folder");
-        }
 
         this.crypto = new CryptoUtil(new File(plugin.getDataFolder(), KEY_FILE_NAME));
         this.keysFile = new File(plugin.getDataFolder(), KEYS_FILE_NAME);
