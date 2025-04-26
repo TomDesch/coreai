@@ -38,12 +38,12 @@ public class CoreAI extends JavaPlugin {
             return;
         }
 
-        // Initialize ChatGPT service
-        ChatGPTService chatService = new ChatGPTService(openAiKey, openAiModel, openAiTimeout, CORE_AI_LOGGER);
+        // Initialize default ChatGPT service
+        ChatGPTService defaultService = new ChatGPTService(openAiKey, openAiModel, openAiTimeout, CORE_AI_LOGGER);
 
-        // Register commands
+        // Register commands with proper executors
         Objects.requireNonNull(getCommand("chat"))
-               .setExecutor(new ChatCommand(this, chatService));
+               .setExecutor(new ChatCommand(this, defaultService));
         Objects.requireNonNull(getCommand("setapikey"))
                .setExecutor(new SetApiKeyCommand(this));
 

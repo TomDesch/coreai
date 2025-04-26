@@ -55,7 +55,7 @@
   <build>
     <defaultGoal>clean package</defaultGoal>
     <plugins>
-      <!-- Compiler configuration -->
+      <!-- Compiler plugin -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -66,7 +66,7 @@
         </configuration>
       </plugin>
 
-      <!-- Shade plugin to create an uber-jar -->
+      <!-- Shade plugin -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
@@ -78,7 +78,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <!-- Relocate dependencies to avoid conflicts -->
+              <!-- Relocations -->
               <relocations>
                 <relocation>
                   <pattern>okhttp3</pattern>
@@ -90,26 +90,33 @@
                 </relocation>
               </relocations>
 
-              <!-- Filter out duplicate resource files -->
+              <!-- Filters: exclude duplicate metadata and Kotlin/annotations/Moshi classes -->
               <filters>
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
+                    <!-- META-INF duplicates -->
                     <exclude>META-INF/okio.kotlin_module</exclude>
                     <exclude>META-INF/versions/**</exclude>
                     <exclude>META-INF/MANIFEST.MF</exclude>
+                    <exclude>META-INF/*.kotlin_module</exclude>
+                    <exclude>**/*.kotlin_metadata</exclude>
+                    <exclude>META-INF/proguard/**</exclude>
+                    <!-- Annotation and Kotlin classes -->
+                    <exclude>org/intellij/lang/annotations/**</exclude>
+                    <exclude>kotlin/**</exclude>
+                    <!-- Moshi metadata -->
+                    <exclude>com/squareup/moshi/**</exclude>
                   </excludes>
                 </filter>
               </filters>
 
-              <!-- Merge plugin manifest entries and define main class -->
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>be.stealingdapenta.coreai.CoreAI</mainClass>
                 </transformer>
               </transformers>
 
-              <!-- Avoid generating a dependency-reduced POM -->
               <createDependencyReducedPom>false</createDependencyReducedPom>
             </configuration>
           </execution>
@@ -118,15 +125,15 @@
     </plugins>
 
     <resources>
-      <!-- Include plugin.yml verbatim so Bukkit can see it -->
+      <!-- plugin.yml unfiltered -->
       <resource>
         <directory>src/main/resources</directory>
-        <filtering>false</filtering>
         <includes>
           <include>plugin.yml</include>
         </includes>
+        <filtering>false</filtering>
       </resource>
-      <!-- All other resources (e.g., config.yml) can still be filtered -->
+      <!-- other resources filtered -->
       <resource>
         <directory>src/main/resources</directory>
         <excludes>
