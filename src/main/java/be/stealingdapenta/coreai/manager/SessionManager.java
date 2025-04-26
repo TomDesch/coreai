@@ -78,6 +78,7 @@ public enum SessionManager implements Listener {
         return agents.computeIfAbsent(uuid, id -> {
             String apiKey = SetApiKeyCommand.getKey(id);
             if (apiKey == null || apiKey.isBlank()) {
+                // Use the default API key if none is set
                 apiKey = API_KEY.get();
             }
             String model = modelOverrides.getOrDefault(id, MODEL.get());

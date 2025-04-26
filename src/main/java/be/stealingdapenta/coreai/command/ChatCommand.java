@@ -1,27 +1,25 @@
 package be.stealingdapenta.coreai.command;
 
-import static be.stealingdapenta.coreai.config.Config.API_KEY;
-import static be.stealingdapenta.coreai.config.Config.MODEL;
-import static be.stealingdapenta.coreai.config.Config.TIMEOUT_MS;
+import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
+import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
+import static net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY;
+import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
 import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
 import static net.kyori.adventure.text.format.NamedTextColor.RED;
 
 import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.permission.PermissionNode;
 import be.stealingdapenta.coreai.service.ChatAgent;
-import be.stealingdapenta.coreai.service.ChatAgentFactory;
+import be.stealingdapenta.coreai.service.OpenAiException;
+import java.io.IOException;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
-/**
- * /chat command: delegates to per-player ChatAgent for context-aware conversation.
- */
 public class ChatCommand implements CommandExecutor {
 
     @Override
@@ -40,50 +38,44 @@ public class ChatCommand implements CommandExecutor {
         }
 
         String prompt = String.join(" ", args);
-        player.sendMessage(Component.text("[CoreAI] Thinking...", NamedTextColor.GRAY));
-
+        player.sendMessage(Component.text(prompt, GRAY));
+        player.sendMessage(Component.text("[CoreAI] Thinking...", DARK_GRAY));
         UUID uuid = player.getUniqueId();
 
+        // Run the chat in an async task
         CoreAI.getInstance()
               .getServer()
               .getScheduler()
               .runTaskAsynchronously(CoreAI.getInstance(), () -> {
+                  ChatAgent agent = SESSION_MANAGER.getAgent(uuid);
                   try {
-                      // Build or fetch agent
-                      ChatAgent agent = ChatAgentFactory.getAgent(uuid, API_KEY.get(), MODEL.get(), TIMEOUT_MS.get());
-
-                      // Apply player override key if set
-                      String overrideKey = SetApiKeyCommand.getKey(uuid);
-                      if (overrideKey != null && !overrideKey.isBlank()) {
-                          agent.setApiKey(overrideKey);
-                      }
-
-                      // TODO: apply model selector override: agent.setModel(...)
-
-                      // Perform chat
                       String response = agent.chat(prompt);
-
-                      // Send back on the main thread
+                      // deliver response on the main thread
                       CoreAI.getInstance()
                             .getServer()
                             .getScheduler()
                             .runTask(CoreAI.getInstance(), () -> player.sendMessage(Component.text("[CoreAI] " + response, GREEN)));
-                  } catch (Exception e) {
-
+                  } catch (OpenAiException oae) {
                       CoreAI.getInstance()
                             .getServer()
                             .getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
-                                if (e.getMessage()
-                                     .contains("Incorrect API key")) {
-                                    player.sendMessage(Component.text("[CoreAI] Error: Incorrect API key. Please set your API key using /setapikey <key>", RED));
-                                } else if (e.getMessage()
-                                            .contains("Model not found")) {
-                                    player.sendMessage(Component.text("[CoreAI] Error: Model not found. Please select a valid model.", RED));
-                                } else {
-                                    player.sendMessage(Component.text("[CoreAI] Error: " + e.getMessage(), RED));
+                                switch (oae.getCode()) {
+                                    case "invalid_api_key" -> player.sendMessage(Component.text("[CoreAI] Error: Your API key is invalid. Use /setapikey <key>", RED));
+                                    case "model_not_found" -> player.sendMessage(Component.text("[CoreAI] Error: That model doesn’t exist. Select one with /models", RED));
+                                    default -> player.sendMessage(Component.text("[CoreAI] Error: " + oae.getMessage(), RED));
                                 }
                             });
+
+                      CORE_AI_LOGGER.warning("===================");
+                      CORE_AI_LOGGER.warning("The agent: " + agent.toString());
+                      CORE_AI_LOGGER.warning("All information from this command: " + oae.getMessage() + " " + oae.getCode());
+                  } catch (IOException ioe) {
+                      // generic network/parsing error -> also on the main thread
+                      CoreAI.getInstance()
+                            .getServer()
+                            .getScheduler()
+                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(Component.text("[CoreAI] Error: " + ioe.getMessage(), RED)));
                   }
               });
 

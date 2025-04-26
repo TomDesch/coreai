@@ -1,13 +1,12 @@
 package be.stealingdapenta.coreai.gui;
 
-import static be.stealingdapenta.coreai.config.Config.API_KEY;
-import static be.stealingdapenta.coreai.config.Config.MODEL;
 import static be.stealingdapenta.coreai.config.Config.TIMEOUT_MS;
+import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 import static net.kyori.adventure.text.format.NamedTextColor.AQUA;
 import static net.kyori.adventure.text.format.NamedTextColor.GOLD;
 import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
 
-import be.stealingdapenta.coreai.service.ChatAgent;
+import be.stealingdapenta.coreai.command.SetApiKeyCommand;
 import be.stealingdapenta.coreai.service.ChatAgentFactory;
 import java.util.List;
 import net.kyori.adventure.text.Component;
@@ -81,11 +80,10 @@ public class ModelSelectorGUI implements Listener {
                                                            .serialize(nameComp);
 
         // Retrieve or create the agent with server defaults
-        ChatAgent agent = ChatAgentFactory.getAgent(player.getUniqueId(), API_KEY.get(), MODEL.get(), TIMEOUT_MS.get());
-        // Apply the player's selection
-        agent.setModel(selectedModel);
+        ChatAgentFactory.getAgent(player.getUniqueId(), SetApiKeyCommand.getKey(player.getUniqueId()), selectedModel, TIMEOUT_MS.get());
+        SESSION_MANAGER.setPlayerModel(player.getUniqueId(), selectedModel);
 
         player.closeInventory();
-        player.sendMessage(Component.text("[CoreAI] Selected model: " + selectedModel, GOLD));
+        player.sendMessage(Component.text("[CoreAI] Selected model stored: " + selectedModel, GOLD));
     }
 }

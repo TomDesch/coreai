@@ -1,7 +1,5 @@
 package be.stealingdapenta.coreai.service;
 
-import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
-
 import com.squareup.moshi.JsonAdapter;
 import com.squareup.moshi.Moshi;
 import com.squareup.moshi.Types;
@@ -41,7 +39,7 @@ public enum OpenAIApi {
 
     private final OkHttpClient client;
     private final JsonAdapter<Map<String, Object>> mapAdapter;
-    private final JsonAdapter<List<Map<String, Object>>> listAdapter;
+    private final JsonAdapter<List<Map<String, Object>>> listAdapter; // todo Private field 'listAdapter' is assigned but never accessed
 
     OpenAIApi() {
         client = new OkHttpClient();
@@ -111,9 +109,15 @@ public enum OpenAIApi {
             String respBody = resp.body()
                                   .string();
             if (!resp.isSuccessful()) {
-                CORE_AI_LOGGER.severe("OpenAI HTTP " + resp.code() + ": " + respBody);
-                throw new IOException("OpenAI HTTP " + resp.code());
+                var errRoot = mapAdapter.fromJson(respBody);
+                assert errRoot != null;
+                String apiCode = ((Map<?, ?>) errRoot.get("error")).get("code")
+                                                                   .toString();
+                String msg = ((Map<?, ?>) errRoot.get("error")).get("message")
+                                                               .toString();
+                throw new OpenAiException(resp.code(), apiCode, msg);
             }
+
             Map<String, Object> root = mapAdapter.fromJson(respBody);
             assert root != null;
 

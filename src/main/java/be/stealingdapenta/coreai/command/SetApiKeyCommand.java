@@ -1,6 +1,8 @@
 package be.stealingdapenta.coreai.command;
 
 import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
+import static be.stealingdapenta.coreai.config.Config.API_KEY;
+import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
 import static net.kyori.adventure.text.format.NamedTextColor.RED;
 
 import be.stealingdapenta.coreai.CoreAI;
@@ -20,6 +22,7 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -44,7 +47,9 @@ public class SetApiKeyCommand implements CommandExecutor {
     private final File keysFile;
     private final FileConfiguration keysConfig;
 
-
+    /**
+     * Constructor: initializes the encryption utility and loads existing keys from disk.
+     */
     public SetApiKeyCommand() {
         Plugin plugin = CoreAI.getInstance();
         plugin.getDataFolder()
@@ -73,10 +78,19 @@ public class SetApiKeyCommand implements CommandExecutor {
     }
 
     /**
-     * Retrieve the stored API key for a player, or null if none set.
+     * Retrieve the stored API key for a player, or fallback to the server default.
      */
     public static String getKey(UUID playerUuid) {
-        return playerKeys.get(playerUuid);
+        String key = playerKeys.get(playerUuid);
+        if (key == null || key.isBlank()) {
+            // fallback to server default
+            Player player = Bukkit.getPlayer(playerUuid);
+            if (player != null) {
+                player.sendMessage(Component.text("No API key set, using server default.", GRAY));
+            }
+            return API_KEY.get();
+        }
+        return key;
     }
 
     @Override
