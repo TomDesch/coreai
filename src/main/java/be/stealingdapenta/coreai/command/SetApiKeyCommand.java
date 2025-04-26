@@ -13,7 +13,8 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -28,7 +29,7 @@ import org.jetbrains.annotations.NotNull;
  */
 public class SetApiKeyCommand implements CommandExecutor {
 
-    // In-memory map of player UUID -> decrypted an API key
+    // In-memory map of player UUID -> a decrypted API key
     private static final ConcurrentHashMap<UUID, String> playerKeys = new ConcurrentHashMap<>();
 
     private final Plugin plugin;
@@ -36,7 +37,7 @@ public class SetApiKeyCommand implements CommandExecutor {
     private final File keysFile;
     private final FileConfiguration keysConfig;
 
-    public SetApiKeyCommand(Plugin plugin) {
+    public SetApiKeyCommand(@NotNull Plugin plugin) {
         this.plugin = plugin;
         plugin.getDataFolder()
               .mkdirs();
@@ -53,7 +54,8 @@ public class SetApiKeyCommand implements CommandExecutor {
                     playerKeys.put(UUID.fromString(uuidStr), decrypted);
                 } catch (Exception e) {
                     plugin.getLogger()
-                          .log(Level.SEVERE, "Failed to decrypt API key for player " + uuidStr, e);
+                          .log(Level.SEVERE, Component.text("Failed to decrypt API key for player " + uuidStr, NamedTextColor.RED)
+                                                      .toString(), e);
                 }
             }
         }
@@ -67,13 +69,13 @@ public class SetApiKeyCommand implements CommandExecutor {
     }
 
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(ChatColor.RED + "Only players can set their API key.");
+            sender.sendMessage(Component.text("Only players can set their API key.", NamedTextColor.RED));
             return true;
         }
         if (args.length != 1) {
-            player.sendMessage(ChatColor.RED + "Usage: /" + label + " <your-api-key>");
+            player.sendMessage(Component.text("Usage: /" + label + " <your-api-key>", NamedTextColor.RED));
             return true;
         }
 
@@ -88,14 +90,15 @@ public class SetApiKeyCommand implements CommandExecutor {
             keysConfig.save(keysFile);
         } catch (IOException e) {
             plugin.getLogger()
-                  .log(Level.SEVERE, "Failed to save encrypted API keys to disk", e);
-            player.sendMessage(ChatColor.RED + "Error saving your API key, please try again.");
+                  .log(Level.SEVERE, Component.text("Failed to save encrypted API keys to disk", NamedTextColor.RED)
+                                              .toString(), e);
+            player.sendMessage(Component.text("Error saving your API key, please try again.", NamedTextColor.RED));
             return true;
         }
 
         // Obfuscate feedback
-        String obf = apiKey.length() <= 4 ? "******" : "******" + apiKey.substring(apiKey.length() - 5);
-        player.sendMessage(ChatColor.GREEN + "Your API key has been stored securely: " + obf);
+        String obf = apiKey.length() <= 4 ? "****" : "****" + apiKey.substring(apiKey.length() - 4);
+        player.sendMessage(Component.text("Your API key has been stored securely: " + obf, NamedTextColor.GREEN));
         return true;
     }
 

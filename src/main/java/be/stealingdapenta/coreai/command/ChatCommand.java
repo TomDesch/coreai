@@ -10,7 +10,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -19,40 +20,39 @@ import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * /chat command: maintains conversation context per player, with per-player API key override.
+ * /chat command: maintains conversation context per player, with per-player API key override, using Adventure API for message formatting.
  */
 public class ChatCommand implements CommandExecutor {
 
     private final Plugin plugin;
     private final Logger logger;
-    private static final int MAX_HISTORY_PAIRS = 10;
-    private final ChatGPTService defaultService;
+
     // per-player conversation history: up to MAX_HISTORY_PAIRS user+assistant messages
     private final ConcurrentHashMap<UUID, Deque<Map<String, Object>>> histories = new ConcurrentHashMap<>();
+    private static final int MAX_HISTORY_PAIRS = 10;
 
-    public ChatCommand(@NotNull Plugin plugin, @NotNull ChatGPTService defaultService) {
+    public ChatCommand(@NotNull Plugin plugin) {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
-        this.defaultService = defaultService;
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(ChatColor.RED + "Only players can use this command.");
+            sender.sendMessage(Component.text("Only players can use this command.", NamedTextColor.RED));
             return true;
         }
         if (!player.hasPermission("coreai.chat")) {
-            player.sendMessage(ChatColor.RED + "You don't have permission to use this.");
+            player.sendMessage(Component.text("You don't have permission to use this.", NamedTextColor.RED));
             return true;
         }
         if (args.length == 0) {
-            player.sendMessage(ChatColor.RED + "Usage: /" + label + " <message>");
+            player.sendMessage(Component.text("Usage: /" + label + " <message>", NamedTextColor.RED));
             return true;
         }
 
         String prompt = String.join(" ", args);
-        player.sendMessage(ChatColor.GRAY + "[CoreAI] Thinking...");
+        player.sendMessage(Component.text("[CoreAI] Thinking...", NamedTextColor.GRAY));
 
         UUID uuid = player.getUniqueId();
         Deque<Map<String, Object>> history = histories.computeIfAbsent(uuid, k -> new ArrayDeque<>());
@@ -70,14 +70,26 @@ public class ChatCommand implements CommandExecutor {
               .getScheduler()
               .runTaskAsynchronously(plugin, () -> {
                   try {
-                      // Determine API key: player override or fallback to default service's key
-                      String overrideKey = SetApiKeyCommand.getKey(uuid);
-                      ChatGPTService service = defaultService;
-                      if (overrideKey != null && !overrideKey.isBlank()) {
-                          // create a new service instance with a player-specific key
-                          service = new ChatGPTService(overrideKey, defaultService.getModel(), defaultService.getTimeout(), logger);
+                      // Determine API key: player override or fallback to config/env
+                      String key = SetApiKeyCommand.getKey(uuid);
+                      if (key == null || key.isBlank()) {
+                          key = plugin.getConfig()
+                                      .getString("openai.api-key", "")
+                                      .trim();
+                          String envKey = System.getenv("OPENAI_API_KEY");
+                          if (key.isBlank() && envKey != null && !envKey.isBlank()) {
+                              key = envKey.trim();
+                          }
                       }
 
+                      // Determine model and timeout
+                      String model = plugin.getConfig()
+                                           .getString("openai.model", "gpt-3.5-turbo");
+                      int timeout = plugin.getConfig()
+                                          .getInt("openai.timeout-ms", 60000);
+
+                      // Instantiate a service for this invocation
+                      ChatGPTService service = new ChatGPTService(key, model, timeout, logger);
                       String response = service.sendChat(context);
 
                       // Append assistant response and notify player on the main thread
@@ -88,12 +100,12 @@ public class ChatCommand implements CommandExecutor {
                                 while (history.size() > MAX_HISTORY_PAIRS * 2) {
                                     history.removeFirst();
                                 }
-                                player.sendMessage(ChatColor.GREEN + "[CoreAI] " + response);
+                                player.sendMessage(Component.text("[CoreAI] " + response, NamedTextColor.GREEN));
                             });
                   } catch (Exception e) {
                       plugin.getServer()
                             .getScheduler()
-                            .runTask(plugin, () -> player.sendMessage(ChatColor.RED + "[CoreAI] Error: " + e.getMessage()));
+                            .runTask(plugin, () -> player.sendMessage(Component.text("[CoreAI] Error: " + e.getMessage(), NamedTextColor.RED)));
                       logger.log(Level.SEVERE, "Error in ChatCommand", e);
                   }
               });
