@@ -94,7 +94,7 @@ public class SetApiKeyCommand implements CommandExecutor {
         }
 
         // Obfuscate feedback
-        String obf = apiKey.length() <= 4 ? "****" : "****" + apiKey.substring(apiKey.length() - 4);
+        String obf = apiKey.length() <= 4 ? "******" : "******" + apiKey.substring(apiKey.length() - 5);
         player.sendMessage(ChatColor.GREEN + "Your API key has been stored securely: " + obf);
         return true;
     }
