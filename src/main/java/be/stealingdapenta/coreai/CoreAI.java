@@ -19,8 +19,16 @@ public class CoreAI extends JavaPlugin {
     private static final String ANSI_YELLOW = "\u001B[33m";
     private static final String ANSI_RED = "\u001B[31m";
 
+    private static CoreAI instance;
+
+    public static CoreAI getInstance() {
+        return instance;
+    }
+
     @Override
     public void onEnable() {
+        instance = this;
+
         // Ensure default config is created
         saveDefaultConfig();
         CORE_AI_LOGGER = this.getLogger();
@@ -38,7 +46,7 @@ public class CoreAI extends JavaPlugin {
 
         // Register commands with proper executors
         Objects.requireNonNull(getCommand("chat"))
-               .setExecutor(new ChatCommand(this));
+               .setExecutor(new ChatCommand());
         Objects.requireNonNull(getCommand("setapikey"))
                .setExecutor(new SetApiKeyCommand(this));
 

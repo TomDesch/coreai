@@ -1,31 +1,24 @@
 package be.stealingdapenta.coreai.command;
 
+import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
+
+import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.service.ChatAgent;
 import be.stealingdapenta.coreai.service.ChatAgentFactory;
 import java.util.UUID;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * /chat command: delegates to per-player ChatAgent for context-aware conversation.
  */
 public class ChatCommand implements CommandExecutor {
-
-    private final Plugin plugin;
-    private final Logger logger;
-
-    public ChatCommand(@NotNull Plugin plugin) {
-        this.plugin = plugin;
-        this.logger = plugin.getLogger();
-    }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String @NotNull [] args) {
@@ -47,19 +40,23 @@ public class ChatCommand implements CommandExecutor {
 
         UUID uuid = player.getUniqueId();
 
-        plugin.getServer()
+        CoreAI.getInstance()
+              .getServer()
               .getScheduler()
-              .runTaskAsynchronously(plugin, () -> {
+              .runTaskAsynchronously(CoreAI.getInstance(), () -> {
                   try {
-                      // Determine API key: plugin config only
-                      String defaultKey = plugin.getConfig()
+                      // Determine API key: CoreAI.getInstance() config only
+                      String defaultKey = CoreAI.getInstance()
+                                                .getConfig()
                                                 .getString("openai.api-key", "")
                                                 .trim();
 
                       // Build or fetch agent
-                      ChatAgent agent = ChatAgentFactory.getAgent(uuid, defaultKey, plugin.getConfig()
-                                                                                          .getString("openai.model", "gpt-3.5-turbo"), plugin.getConfig()
-                                                                                                                                             .getInt("openai.timeout-ms", 60000), logger);
+                      ChatAgent agent = ChatAgentFactory.getAgent(uuid, defaultKey, CoreAI.getInstance()
+                                                                                          .getConfig()
+                                                                                          .getString("openai.model", "gpt-3.5-turbo"), CoreAI.getInstance()
+                                                                                                                                             .getConfig()
+                                                                                                                                             .getInt("openai.timeout-ms", 60000));
 
                       // Apply player override key if set
                       String overrideKey = SetApiKeyCommand.getKey(uuid);
@@ -73,14 +70,16 @@ public class ChatCommand implements CommandExecutor {
                       String response = agent.chat(prompt);
 
                       // Send back on the main thread
-                      plugin.getServer()
+                      CoreAI.getInstance()
+                            .getServer()
                             .getScheduler()
-                            .runTask(plugin, () -> player.sendMessage(Component.text("[CoreAI] " + response, NamedTextColor.GREEN)));
+                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(Component.text("[CoreAI] " + response, NamedTextColor.GREEN)));
                   } catch (Exception e) {
-                      plugin.getServer()
+                      CoreAI.getInstance()
+                            .getServer()
                             .getScheduler()
-                            .runTask(plugin, () -> player.sendMessage(Component.text("[CoreAI] Error: " + e.getMessage(), NamedTextColor.RED)));
-                      logger.log(Level.SEVERE, "Error in ChatCommand", e);
+                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(Component.text("[CoreAI] Error: " + e.getMessage(), NamedTextColor.RED)));
+                      CORE_AI_LOGGER.log(Level.SEVERE, "Error in ChatCommand", e);
                   }
               });
 

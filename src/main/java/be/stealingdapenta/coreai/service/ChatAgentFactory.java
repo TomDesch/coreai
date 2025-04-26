@@ -2,7 +2,6 @@ package be.stealingdapenta.coreai.service;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Logger;
 
 /**
  * Factory for ChatAgent instances, one per player.
@@ -14,7 +13,7 @@ public class ChatAgentFactory {
     /**
      * Retrieve or create ChatAgent for a player.
      */
-    public static ChatAgent getAgent(UUID playerId, String defaultKey, String defaultModel, int timeoutMs, Logger logger) {
-        return AGENTS.computeIfAbsent(playerId, id -> new ChatAgent(id, defaultKey, defaultModel, timeoutMs, logger));
+    public static ChatAgent getAgent(UUID playerId, String apiKey, String reasoningModel, int timeoutMs) {
+        return AGENTS.computeIfAbsent(playerId, id -> new ChatAgent(id, apiKey, reasoningModel, timeoutMs));
     }
 }
