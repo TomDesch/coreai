@@ -1,13 +1,20 @@
 package be.stealingdapenta.coreai.command;
 
+import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
+import static be.stealingdapenta.coreai.service.OpenAIApi.OPEN_AI_API;
 import static net.kyori.adventure.text.format.NamedTextColor.AQUA;
-import static net.kyori.adventure.text.format.NamedTextColor.GOLD;
+import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
 import static net.kyori.adventure.text.format.NamedTextColor.RED;
 
-import be.stealingdapenta.coreai.manager.SessionManager;
+import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.permission.PermissionNode;
+import be.stealingdapenta.coreai.service.ChatAgent;
+import be.stealingdapenta.coreai.service.OpenAiException;
+import java.io.IOException;
+import java.util.Map;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -15,19 +22,10 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * /modelinfo command: displays the player's current AI model and configuration.
+ * /modelinfo command: fetches and displays detailed info for the player's current AI model.
  */
 public class ModelInfoCommand implements CommandExecutor {
 
-    /**
-     * Executes the /modelinfo command.
-     *
-     * @param sender  the command sender
-     * @param command the command executed
-     * @param label   the alias used
-     * @param args    command arguments
-     * @return true if handled
-     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
@@ -35,19 +33,48 @@ public class ModelInfoCommand implements CommandExecutor {
             return true;
         }
         if (!player.hasPermission(PermissionNode.MODELS.node())) {
-            player.sendMessage(Component.text("You don't have permission to view your model info.", RED));
+            player.sendMessage(Component.text("You don't have permission to view model info.", RED));
             return true;
         }
 
         UUID uuid = player.getUniqueId();
-        var agent = SessionManager.SESSION_MANAGER.getAgent(uuid);
-        String model = agent.getModel();
+        ChatAgent agent = SESSION_MANAGER.getAgent(uuid);
         String apiKey = agent.getApiKey();
-        String maskedKey = apiKey == null || apiKey.isBlank() ? "<none>" : "****" + apiKey.substring(Math.max(0, apiKey.length() - 4));
+        String modelId = agent.getModel();
 
-        player.sendMessage(Component.text("[CoreAI] Current Model: " + model, AQUA));
-        player.sendMessage(Component.text("[CoreAI] API Key: " + maskedKey, AQUA));
-        player.sendMessage(Component.text("Use /models to change model or /setapikey to update your key.", GOLD));
+        if (apiKey == null || apiKey.isBlank()) {
+            player.sendMessage(Component.text("[CoreAI] You must set an API key first: /setapikey <key>", RED));
+            return true;
+        }
+
+        player.sendMessage(Component.text("[CoreAI] Fetching info for model: " + modelId, GRAY));
+
+        // Async fetch model info
+        Bukkit.getScheduler()
+              .runTaskAsynchronously(CoreAI.getInstance(), () -> {
+                  try {
+                      Map<String, Object> info = OPEN_AI_API.getModelInfo(apiKey, modelId);
+                      // On success, display all fields
+                      Bukkit.getScheduler()
+                            .runTask(CoreAI.getInstance(), () -> {
+                                player.sendMessage(Component.text("[CoreAI] Model Info:", AQUA));
+                                info.forEach((key, value) -> {
+                                    player.sendMessage(Component.text(key + ": " + value, AQUA));
+                                });
+                            });
+                  } catch (OpenAiException oae) {
+                      Bukkit.getScheduler()
+                            .runTask(CoreAI.getInstance(), () -> {
+                                player.sendMessage(Component.text("[CoreAI] Error fetching model info: " + oae.getMessage(), RED));
+                            });
+                  } catch (IOException ioe) {
+                      Bukkit.getScheduler()
+                            .runTask(CoreAI.getInstance(), () -> {
+                                player.sendMessage(Component.text("[CoreAI] Network error: " + ioe.getMessage(), RED));
+                            });
+                  }
+              });
+
         return true;
     }
 }

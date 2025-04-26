@@ -36,6 +36,10 @@ public enum OpenAIApi {
     private static final String MODEL = "model";
     private static final String MESSAGES = "messages";
     private static final String HTTP = "HTTP ";
+    private static final String BASE_URL = "https://api.openai.com/v1";
+    private static final String MODEL_LIST_PATH = "/models";
+    private static final String MODEL_INFO_PATH = "/models/%s";
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private final OkHttpClient client;
     private final JsonAdapter<Map<String, Object>> mapAdapter;
@@ -79,6 +83,36 @@ public enum OpenAIApi {
                        .map(m -> m.get(ID)
                                   .toString())
                        .toList();
+        }
+    }
+
+    /**
+     * Fetches detailed information for a specific model.
+     *
+     * @param apiKey  Bearer key
+     * @param modelId ID of the model
+     * @return raw JSON as Map
+     * @throws IOException     on network error
+     * @throws OpenAiException on API error
+     */
+    public Map<String, Object> getModelInfo(String apiKey, String modelId) throws IOException, OpenAiException {
+        String path = String.format(MODEL_INFO_PATH, modelId);
+        Request req = new Request.Builder().url(BASE_URL + path)
+                                           .addHeader("Authorization", "Bearer " + apiKey)
+                                           .get()
+                                           .build();
+        try (Response resp = client.newCall(req)
+                                   .execute()) {
+            String body = resp.body() != null ? resp.body()
+                                                    .string() : "";
+            if (!resp.isSuccessful()) {
+                throwOpenAiError(resp.code(), body);
+            }
+            Map<String, Object> json = mapAdapter.fromJson(body);
+            if (json == null) {
+                throw new OpenAiException(resp.code(), "invalid_response", "Empty response");
+            }
+            return json;
         }
     }
 
@@ -133,4 +167,23 @@ public enum OpenAIApi {
                           .trim();
         }
     }
+
+    /**
+     * Parses an OpenAI error response and throws OpenAiException.
+     */
+    private void throwOpenAiError(int status, String body) throws OpenAiException {
+        try {
+            Map<String, Object> errRoot = mapAdapter.fromJson(body);
+            if (errRoot != null && errRoot.get("error") instanceof Map<?, ?> err) {
+                String msg = err.get("message")
+                                .toString();
+                String code = err.get("code") != null ? err.get("code")
+                                                           .toString() : "unknown_error";
+                throw new OpenAiException(status, code, msg);
+            }
+        } catch (IOException ignored) {
+        }
+        throw new OpenAiException(status, "http_error", "HTTP " + status);
+    }
+
 }
