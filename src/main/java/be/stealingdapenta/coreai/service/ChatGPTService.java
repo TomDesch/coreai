@@ -27,6 +27,7 @@ public class ChatGPTService {
     private final OkHttpClient client;
     private final String apiKey;
     private final String model;
+    private final int timeoutMs;
     private final Logger logger;
     private final JsonAdapter<Map<String, Object>> mapAdapter;
 
@@ -39,6 +40,7 @@ public class ChatGPTService {
     public ChatGPTService(String apiKey, String model, int timeoutMs, Logger logger) {
         this.apiKey = apiKey;
         this.model = model;
+        this.timeoutMs = timeoutMs;
         this.logger = logger;
 
         this.client = new OkHttpClient.Builder().connectTimeout(timeoutMs, TimeUnit.MILLISECONDS)
@@ -52,7 +54,22 @@ public class ChatGPTService {
     }
 
     /**
+     * Returns the model name used by this service.
+     */
+    public String getModel() {
+        return model;
+    }
+
+    /**
+     * Returns the request timeout in milliseconds.
+     */
+    public int getTimeout() {
+        return timeoutMs;
+    }
+
+    /**
      * Sends a user prompt to the OpenAI Chat API and returns the assistant's reply.
+     *
      * @param userPrompt The prompt text from the user
      * @return The assistant's response text
      * @throws IOException If network or parsing errors occur
@@ -95,7 +112,7 @@ public class ChatGPTService {
                 throw new IOException("Received empty response from OpenAI");
             }
 
-            // Extract the first choice using a Deque for thread-safety and readability
+            // Extract the first choice using a Deque for readability
             Object choicesObj = respMap.get("choices");
             if (!(choicesObj instanceof List<?> choicesList)) {
                 throw new IOException("Unexpected response format: missing choices");

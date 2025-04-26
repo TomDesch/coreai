@@ -19,25 +19,25 @@ import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * /chat command: maintains conversation context per player.
+ * /chat command: maintains conversation context per player, with per-player API key override.
  */
 public class ChatCommand implements CommandExecutor {
 
     private final Plugin plugin;
-    private final ChatGPTService chatService;
-    private static final int MAX_HISTORY_PAIRS = 10;
     private final Logger logger;
+    private static final int MAX_HISTORY_PAIRS = 10;
+    private final ChatGPTService defaultService;
     // per-player conversation history: up to MAX_HISTORY_PAIRS user+assistant messages
-    private final Map<UUID, Deque<Map<String, Object>>> histories = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Deque<Map<String, Object>>> histories = new ConcurrentHashMap<>();
 
-    public ChatCommand(Plugin plugin, ChatGPTService chatService) {
+    public ChatCommand(@NotNull Plugin plugin, @NotNull ChatGPTService defaultService) {
         this.plugin = plugin;
-        this.chatService = chatService;
         this.logger = plugin.getLogger();
+        this.defaultService = defaultService;
     }
 
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, String @NotNull [] args) {
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage(ChatColor.RED + "Only players can use this command.");
             return true;
@@ -52,45 +52,42 @@ public class ChatCommand implements CommandExecutor {
         }
 
         String prompt = String.join(" ", args);
-
-        player.sendMessage(ChatColor.GRAY + "[CoreAI] [Prompted:] " + prompt);
-        player.sendMessage(ChatColor.DARK_GRAY + "[CoreAI] Thinking...");
+        player.sendMessage(ChatColor.GRAY + "[CoreAI] Thinking...");
 
         UUID uuid = player.getUniqueId();
-        // Initialize history for player if absent
-        Deque<Map<String, Object>> history = histories.computeIfAbsent(uuid, id -> new ArrayDeque<>());
+        Deque<Map<String, Object>> history = histories.computeIfAbsent(uuid, k -> new ArrayDeque<>());
 
-        // Create user message entry
-        Map<String, Object> userMsg = Map.of("role", "user", "content", prompt);
-
-        // Update history on the main thread
-        history.addLast(userMsg);
-        // Trim oldest if exceeding max pairs
+        // Add a user message to history on the main thread
+        history.addLast(Map.of("role", "user", "content", prompt));
         while (history.size() > MAX_HISTORY_PAIRS * 2) {
             history.removeFirst();
         }
 
-        // Copy context for use in an async task
+        // Prepare context copy for async call
         List<Map<String, Object>> context = new ArrayList<>(history);
 
-        // Perform API call asynchronously
         plugin.getServer()
               .getScheduler()
               .runTaskAsynchronously(plugin, () -> {
                   try {
-                      String response = chatService.sendChat(context);
+                      // Determine API key: player override or fallback to default service's key
+                      String overrideKey = SetApiKeyCommand.getKey(uuid);
+                      ChatGPTService service = defaultService;
+                      if (overrideKey != null && !overrideKey.isBlank()) {
+                          // create a new service instance with a player-specific key
+                          service = new ChatGPTService(overrideKey, defaultService.getModel(), defaultService.getTimeout(), logger);
+                      }
 
-                      // Schedule appending assistant response and sending to player
+                      String response = service.sendChat(context);
+
+                      // Append assistant response and notify player on the main thread
                       plugin.getServer()
                             .getScheduler()
                             .runTask(plugin, () -> {
-                                // Append an assistant message to history
-                                Map<String, Object> assistantMsg = Map.of("role", "assistant", "content", response);
-                                history.addLast(assistantMsg);
+                                history.addLast(Map.of("role", "assistant", "content", response));
                                 while (history.size() > MAX_HISTORY_PAIRS * 2) {
                                     history.removeFirst();
                                 }
-
                                 player.sendMessage(ChatColor.GREEN + "[CoreAI] " + response);
                             });
                   } catch (Exception e) {
