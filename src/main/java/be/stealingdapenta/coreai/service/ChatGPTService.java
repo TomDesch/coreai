@@ -68,18 +68,6 @@ public class ChatGPTService {
     }
 
     /**
-     * Sends a user prompt to the OpenAI Chat API and returns the assistant's reply.
-     *
-     * @param userPrompt The prompt text from the user
-     * @return The assistant's response text
-     * @throws IOException If network or parsing errors occur
-     */
-    public String sendMessage(String userPrompt) throws IOException {
-        Map<String, Object> message = Map.of("role", "user", "content", userPrompt);
-        return sendChat(List.of(message));
-    }
-
-    /**
      * Sends a full conversation history to the OpenAI Chat API.
      *
      * @param messages list of messages (role and content) to include in the context
