@@ -23,6 +23,11 @@ commands:
     usage: /<command> <model>
     permission: coreai.models
 
+  modelinfo:
+    description: Show your current AI model and key info.
+    usage: /<command>
+    permission: coreai.modelinfo
+
 permissions:
   coreai.setapikey:
     description: Allows setting your personal OpenAI API key
@@ -32,4 +37,7 @@ permissions:
     default: true
   coreai.models:
     description: Allows selecting the AI model via GUI
+    default: true
+  coreai.modelinfo:
+    description: Allows using /modelinfo to show your current AI model and key info
     default: true

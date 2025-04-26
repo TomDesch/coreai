@@ -36,6 +36,10 @@ public class ChatAgent {
         this.apiKey = apiKey;
     }
 
+    public String getModel() {
+        return model;
+    }
+
     public String getApiKey() {
         return apiKey;
     }

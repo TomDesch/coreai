@@ -9,7 +9,7 @@ public enum PermissionNode {
     /**
      * Allows players to set their personal OpenAI API key.
      */
-    SET_API_KEY("coreai.setapikey", PermissionDefault.OP, "Allows setting your personal OpenAI API key"),
+    SET_API_KEY("coreai.setapikey", PermissionDefault.TRUE, "Allows setting your personal OpenAI API key"),
 
     /**
      * Allows chatting with the AI.
@@ -19,7 +19,12 @@ public enum PermissionNode {
     /**
      * Allows opening the model selection GUI.
      */
-    MODELS("coreai.models", PermissionDefault.TRUE, "Allows selecting the AI model via GUI");
+    MODELS("coreai.models", PermissionDefault.TRUE, "Allows selecting the AI model via GUI"),
+
+    /**
+     * Allows using the /modelinfo command to set the AI model.
+     */
+    MODEL_INFO("coreai.modelinfo", PermissionDefault.TRUE, "Allows using /modelinfo to get information about the AI model");
 
     private final String node;
     private final PermissionDefault defaultValue;

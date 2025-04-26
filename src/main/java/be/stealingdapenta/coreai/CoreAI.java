@@ -5,6 +5,7 @@ import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 
 import be.stealingdapenta.coreai.command.ChatCommand;
 import be.stealingdapenta.coreai.command.ModelCommand;
+import be.stealingdapenta.coreai.command.ModelInfoCommand;
 import be.stealingdapenta.coreai.command.SetApiKeyCommand;
 import be.stealingdapenta.coreai.gui.ModelSelectorGUI;
 import java.util.Objects;
@@ -59,6 +60,9 @@ public class CoreAI extends JavaPlugin {
                .setExecutor(new SetApiKeyCommand());
         Objects.requireNonNull(getCommand("models"))
                .setExecutor(new ModelCommand(gui));
+        Objects.requireNonNull(getCommand("modelinfo"))
+               .setExecutor(new ModelInfoCommand());
+
 
 
 
