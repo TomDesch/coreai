@@ -43,12 +43,12 @@ public class CoreAI extends JavaPlugin {
                .setExecutor(new SetApiKeyCommand(this));
 
         // Colored ready message
-        CORE_AI_LOGGER.info(ANSI_GREEN + "[CoreAI] CoreAI ready to roll!" + ANSI_RESET);
+        CORE_AI_LOGGER.info(ANSI_GREEN + "CoreAI ready to roll!" + ANSI_RESET);
     }
 
     @Override
     public void onDisable() {
         // Colored disable message
-        CORE_AI_LOGGER.info(ANSI_RED + "[CoreAI] CoreAI disabled." + ANSI_RESET);
+        CORE_AI_LOGGER.info(ANSI_RED + "CoreAI disabled." + ANSI_RESET);
     }
 }
