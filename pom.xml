@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>be.stealingdapenta</groupId>
-  <artifactId>CoreAI</artifactId>
+  <artifactId>coreai</artifactId>
   <version>1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
 
@@ -68,5 +68,17 @@
       <version>1.21.5-R0.1-SNAPSHOT</version>
       <scope>provided</scope>
     </dependency>
+
+    <dependency>
+      <groupId>com.squareup.okhttp3</groupId>
+      <artifactId>okhttp</artifactId>
+      <version>4.12.0</version>
+    </dependency>
+    <dependency>
+      <groupId>com.squareup.moshi</groupId>
+      <artifactId>moshi</artifactId>
+      <version>1.15.2</version>
+    </dependency>
+
   </dependencies>
 </project>

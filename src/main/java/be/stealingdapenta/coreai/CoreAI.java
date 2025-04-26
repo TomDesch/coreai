@@ -1,4 +1,4 @@
-package be.stealingdapenta.coreAI;
+package be.stealingdapenta.coreai;
 
 import org.bukkit.plugin.java.JavaPlugin;
 
