@@ -1,7 +1,9 @@
 package be.stealingdapenta.coreai.command;
 
+import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
 import static net.kyori.adventure.text.format.NamedTextColor.RED;
 
+import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.permission.PermissionNode;
 import java.io.File;
 import java.io.IOException;
@@ -38,16 +40,20 @@ public class SetApiKeyCommand implements CommandExecutor {
     private static final String KEYS_FILE_NAME = "playerkeys.yml";
     private static final String ENCRYPTION_ALGORITHM = "AES/GCM/NoPadding";
 
-    private final Plugin plugin;
     private final CryptoUtil crypto;
     private final File keysFile;
     private final FileConfiguration keysConfig;
 
 
-    public SetApiKeyCommand(@NotNull Plugin plugin) {
-        this.plugin = plugin;
-        plugin.getDataFolder()
+    public SetApiKeyCommand() {
+        Plugin plugin = CoreAI.getInstance();
+        boolean filesMade = plugin.getDataFolder()
               .mkdirs();
+
+        if (!filesMade) {
+            throw new IllegalStateException("Couldn't create the keys folder");
+        }
+
         this.crypto = new CryptoUtil(new File(plugin.getDataFolder(), KEY_FILE_NAME));
         this.keysFile = new File(plugin.getDataFolder(), KEYS_FILE_NAME);
         this.keysConfig = YamlConfiguration.loadConfiguration(keysFile);
@@ -55,15 +61,17 @@ public class SetApiKeyCommand implements CommandExecutor {
         // Load existing encrypted keys
         for (String uuidStr : keysConfig.getKeys(false)) {
             String encrypted = keysConfig.getString(uuidStr);
-            if (encrypted != null) {
-                try {
-                    String decrypted = crypto.decrypt(encrypted);
-                    playerKeys.put(UUID.fromString(uuidStr), decrypted);
-                } catch (Exception e) {
-                    plugin.getLogger()
-                          .log(Level.SEVERE, Component.text("Failed to decrypt API key for player " + uuidStr, RED)
-                                                      .toString(), e);
-                }
+
+            if (encrypted == null || encrypted.isBlank()) {
+                continue;
+            }
+
+            try {
+                String decrypted = crypto.decrypt(encrypted);
+                playerKeys.put(UUID.fromString(uuidStr), decrypted);
+            } catch (Exception e) {
+                CORE_AI_LOGGER.log(Level.SEVERE, Component.text("Failed to decrypt API key for player " + uuidStr, RED)
+                                                          .toString(), e);
             }
         }
     }
@@ -102,9 +110,8 @@ public class SetApiKeyCommand implements CommandExecutor {
         try {
             keysConfig.save(keysFile);
         } catch (IOException e) {
-            plugin.getLogger()
-                  .log(Level.SEVERE, Component.text("Failed to save encrypted API keys to disk", RED)
-                                              .toString(), e);
+            CORE_AI_LOGGER.log(Level.SEVERE, Component.text("Failed to save encrypted API keys to disk", RED)
+                                                      .toString(), e);
             player.sendMessage(Component.text("Error saving your API key, please try again.", RED));
             return true;
         }

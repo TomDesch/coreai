@@ -1,6 +1,7 @@
 package be.stealingdapenta.coreai;
 
 import static be.stealingdapenta.coreai.config.Config.API_KEY;
+import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 
 import be.stealingdapenta.coreai.command.ChatCommand;
 import be.stealingdapenta.coreai.command.ModelCommand;
@@ -41,22 +42,26 @@ public class CoreAI extends JavaPlugin {
 
         validateDefaultAPIKey();
 
+        // Initialize the SessionManager
+        SESSION_MANAGER.initialize();
+
         // Register events
         ModelSelectorGUI gui = new ModelSelectorGUI();
         getServer().getPluginManager()
                    .registerEvents(gui, this);
+        getServer().getPluginManager()
+                   .registerEvents(SESSION_MANAGER, this);
 
         // Register commands with proper executors
         Objects.requireNonNull(getCommand("chat"))
                .setExecutor(new ChatCommand());
         Objects.requireNonNull(getCommand("setapikey"))
-               .setExecutor(new SetApiKeyCommand(this));
-        getCommand("models").setExecutor(new ModelCommand(gui));
+               .setExecutor(new SetApiKeyCommand());
+        Objects.requireNonNull(getCommand("models"))
+               .setExecutor(new ModelCommand(gui));
 
 
 
-
-        // Colored ready message
         CORE_AI_LOGGER.info(ANSI_GREEN + "CoreAI ready to roll!" + ANSI_RESET);
     }
 
@@ -69,7 +74,6 @@ public class CoreAI extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // Colored disable message
         CORE_AI_LOGGER.info(ANSI_RED + "CoreAI disabled." + ANSI_RESET);
     }
 }
