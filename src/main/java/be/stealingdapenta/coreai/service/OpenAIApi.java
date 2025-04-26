@@ -87,10 +87,10 @@ public enum OpenAIApi {
     /**
      * Send a chat completion request and return the assistant response.
      *
-     * @param apiKey OpenAI API key
-     * @param model Model ID to use for the request
+     * @param apiKey    OpenAI API key
+     * @param model     Model ID to use for the request
      * @param timeoutMs Timeout in milliseconds
-     * @param messages List of messages in the conversation
+     * @param messages  List of messages in the conversation
      * @return Assistant response
      * @throws IOException if an error occurs during the request
      */
@@ -116,10 +116,14 @@ public enum OpenAIApi {
             }
             Map<String, Object> root = mapAdapter.fromJson(respBody);
             assert root != null;
+
             @SuppressWarnings("unchecked") List<Map<String, Object>> choices = (List<Map<String, Object>>) root.get(CHOICES);
+
             Deque<Map<String, Object>> dq = new LinkedList<>(choices);
             Map<String, Object> first = dq.getFirst();
+
             @SuppressWarnings("unchecked") Map<String, Object> message = (Map<String, Object>) first.get(MESSAGE);
+
             return message.get(CONTENT)
                           .toString()
                           .trim();

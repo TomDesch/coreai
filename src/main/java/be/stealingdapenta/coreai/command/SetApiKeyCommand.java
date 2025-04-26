@@ -1,5 +1,7 @@
 package be.stealingdapenta.coreai.command;
 
+import static net.kyori.adventure.text.format.NamedTextColor.RED;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -54,7 +56,7 @@ public class SetApiKeyCommand implements CommandExecutor {
                     playerKeys.put(UUID.fromString(uuidStr), decrypted);
                 } catch (Exception e) {
                     plugin.getLogger()
-                          .log(Level.SEVERE, Component.text("Failed to decrypt API key for player " + uuidStr, NamedTextColor.RED)
+                          .log(Level.SEVERE, Component.text("Failed to decrypt API key for player " + uuidStr, RED)
                                                       .toString(), e);
                 }
             }
@@ -71,11 +73,11 @@ public class SetApiKeyCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(Component.text("Only players can set their API key.", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Only players can set their API key.", RED));
             return true;
         }
         if (args.length != 1) {
-            player.sendMessage(Component.text("Usage: /" + label + " <your-api-key>", NamedTextColor.RED));
+            player.sendMessage(Component.text("Usage: /" + label + " <your-api-key>", RED));
             return true;
         }
 
@@ -90,9 +92,9 @@ public class SetApiKeyCommand implements CommandExecutor {
             keysConfig.save(keysFile);
         } catch (IOException e) {
             plugin.getLogger()
-                  .log(Level.SEVERE, Component.text("Failed to save encrypted API keys to disk", NamedTextColor.RED)
+                  .log(Level.SEVERE, Component.text("Failed to save encrypted API keys to disk", RED)
                                               .toString(), e);
-            player.sendMessage(Component.text("Error saving your API key, please try again.", NamedTextColor.RED));
+            player.sendMessage(Component.text("Error saving your API key, please try again.", RED));
             return true;
         }
 

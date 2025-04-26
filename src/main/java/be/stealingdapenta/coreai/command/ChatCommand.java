@@ -1,6 +1,11 @@
 package be.stealingdapenta.coreai.command;
 
 import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
+import static be.stealingdapenta.coreai.config.Config.API_KEY;
+import static be.stealingdapenta.coreai.config.Config.MODEL;
+import static be.stealingdapenta.coreai.config.Config.TIMEOUT_MS;
+import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
+import static net.kyori.adventure.text.format.NamedTextColor.RED;
 
 import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.service.ChatAgent;
@@ -23,15 +28,15 @@ public class ChatCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(Component.text("Only players can use this command.", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Only players can use this command.", RED));
             return true;
         }
         if (!player.hasPermission("coreai.chat")) {
-            player.sendMessage(Component.text("You don't have permission.", NamedTextColor.RED));
+            player.sendMessage(Component.text("You don't have permission.", RED));
             return true;
         }
         if (args.length == 0) {
-            player.sendMessage(Component.text("Usage: /" + label + " <message>", NamedTextColor.RED));
+            player.sendMessage(Component.text("Usage: /" + label + " <message>", RED));
             return true;
         }
 
@@ -45,18 +50,8 @@ public class ChatCommand implements CommandExecutor {
               .getScheduler()
               .runTaskAsynchronously(CoreAI.getInstance(), () -> {
                   try {
-                      // Determine API key: CoreAI.getInstance() config only
-                      String defaultKey = CoreAI.getInstance()
-                                                .getConfig()
-                                                .getString("openai.api-key", "")
-                                                .trim();
-
                       // Build or fetch agent
-                      ChatAgent agent = ChatAgentFactory.getAgent(uuid, defaultKey, CoreAI.getInstance()
-                                                                                          .getConfig()
-                                                                                          .getString("openai.model", "gpt-3.5-turbo"), CoreAI.getInstance()
-                                                                                                                                             .getConfig()
-                                                                                                                                             .getInt("openai.timeout-ms", 60000));
+                      ChatAgent agent = ChatAgentFactory.getAgent(uuid, API_KEY.get(), MODEL.get(), TIMEOUT_MS.get());
 
                       // Apply player override key if set
                       String overrideKey = SetApiKeyCommand.getKey(uuid);
@@ -73,12 +68,12 @@ public class ChatCommand implements CommandExecutor {
                       CoreAI.getInstance()
                             .getServer()
                             .getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(Component.text("[CoreAI] " + response, NamedTextColor.GREEN)));
+                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(Component.text("[CoreAI] " + response, GREEN)));
                   } catch (Exception e) {
                       CoreAI.getInstance()
                             .getServer()
                             .getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(Component.text("[CoreAI] Error: " + e.getMessage(), NamedTextColor.RED)));
+                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(Component.text("[CoreAI] Error: " + e.getMessage(), RED)));
                       CORE_AI_LOGGER.log(Level.SEVERE, "Error in ChatCommand", e);
                   }
               });
