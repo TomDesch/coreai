@@ -23,7 +23,6 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import net.kyori.adventure.text.Component;
-import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.EventHandler;
@@ -63,8 +62,6 @@ public enum SessionManager implements Listener {
         loadStoredAPIKeys();
         this.crypto = new CryptoUtil(new File(CoreAI.getInstance()
                                                     .getDataFolder(), KEY_FILE_NAME));
-        Bukkit.getPluginManager()
-              .registerEvents(this, CoreAI.getInstance());
     }
 
 
