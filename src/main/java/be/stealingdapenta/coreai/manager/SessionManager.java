@@ -40,6 +40,9 @@ public enum SessionManager implements Listener {
      */
     SESSION_MANAGER;
 
+    private CryptoUtil crypto;
+
+
     private static final String OVERRIDES_FILENAME = "player_models.yml";
 
     private final Map<UUID, ChatAgent> agents = new ConcurrentHashMap<>();
@@ -58,9 +61,12 @@ public enum SessionManager implements Listener {
     public void initialize() {
         loadModelOverrides();
         loadStoredAPIKeys();
+        this.crypto = new CryptoUtil(new File(CoreAI.getInstance()
+                                                    .getDataFolder(), KEY_FILE_NAME));
         Bukkit.getPluginManager()
               .registerEvents(this, CoreAI.getInstance());
     }
+
 
     private void loadModelOverrides() {
         Plugin plugin = CoreAI.getInstance();
@@ -172,7 +178,6 @@ public enum SessionManager implements Listener {
             File keysFile = new File(plugin.getDataFolder(), KEYS_FILE_NAME);
             FileConfiguration keysConfig = YamlConfiguration.loadConfiguration(keysFile);
 
-            CryptoUtil crypto = new CryptoUtil(new File(plugin.getDataFolder(), KEY_FILE_NAME));
             String encrypted = crypto.encrypt(apiKey);
 
             keysConfig.set(uuid.toString(), encrypted);
