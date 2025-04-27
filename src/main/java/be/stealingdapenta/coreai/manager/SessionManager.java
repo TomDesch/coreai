@@ -64,7 +64,7 @@ public enum SessionManager implements Listener {
                                                     .getDataFolder(), KEY_FILE_NAME));
     }
 
-
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     private void loadModelOverrides() {
         Plugin plugin = CoreAI.getInstance();
         overridesFile = new File(plugin.getDataFolder(), OVERRIDES_FILENAME);
@@ -90,7 +90,7 @@ public enum SessionManager implements Listener {
         }
     }
 
-
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     private void loadStoredAPIKeys() {
         Plugin plugin = CoreAI.getInstance();
         plugin.getDataFolder()

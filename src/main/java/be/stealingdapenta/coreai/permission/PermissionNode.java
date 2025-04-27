@@ -1,7 +1,5 @@
 package be.stealingdapenta.coreai.permission;
 
-import org.bukkit.permissions.PermissionDefault;
-
 /**
  * Centralized registry of all permission nodes used by CoreAI.
  */
@@ -9,31 +7,29 @@ public enum PermissionNode {
     /**
      * Allows players to set their personal OpenAI API key.
      */
-    SET_API_KEY("coreai.setapikey", PermissionDefault.TRUE, "Allows setting your personal OpenAI API key"),
+    SET_API_KEY("coreai.setapikey"),
 
     /**
      * Allows chatting with the AI.
      */
-    CHAT("coreai.chat", PermissionDefault.TRUE, "Allows using /chat to talk with the AI"),
+    CHAT("coreai.chat"),
 
     /**
      * Allows opening the model selection GUI.
      */
-    MODELS("coreai.models", PermissionDefault.TRUE, "Allows selecting the AI model via GUI"),
+    MODELS("coreai.models"),
 
     /**
      * Allows using the /modelinfo command to set the AI model.
      */
-    MODEL_INFO("coreai.modelinfo", PermissionDefault.TRUE, "Allows using /modelinfo to get information about the AI model");
+    MODEL_INFO("coreai.modelinfo");
 
     private final String node;
-    private final PermissionDefault defaultValue;
-    private final String description;
 
-    PermissionNode(String node, PermissionDefault defaultValue, String description) {
+
+    PermissionNode(String node) {
         this.node = node;
-        this.defaultValue = defaultValue;
-        this.description = description;
+
     }
 
     /**
@@ -43,17 +39,4 @@ public enum PermissionNode {
         return node;
     }
 
-    /**
-     * Returns the Bukkit {@link PermissionDefault} value for this node.
-     */
-    public PermissionDefault defaultValue() {
-        return defaultValue;
-    }
-
-    /**
-     * Returns a human-readable description for this permission.
-     */
-    public String description() {
-        return description;
-    }
 }

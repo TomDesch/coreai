@@ -37,22 +37,17 @@ public enum OpenAIApi {
     private static final String MESSAGES = "messages";
     private static final String HTTP = "HTTP ";
     private static final String BASE_URL = "https://api.openai.com/v1";
-    private static final String MODEL_LIST_PATH = "/models";
     private static final String MODEL_INFO_PATH = "/models/%s";
-    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private final OkHttpClient client;
     private final JsonAdapter<Map<String, Object>> mapAdapter;
-    private final JsonAdapter<List<Map<String, Object>>> listAdapter; // todo Private field 'listAdapter' is assigned but never accessed
 
     OpenAIApi() {
         client = new OkHttpClient();
         Type mapType = Types.newParameterizedType(Map.class, String.class, Object.class);
-        Type listType = Types.newParameterizedType(List.class, Types.newParameterizedType(Map.class, String.class, Object.class));
         mapAdapter = new Moshi.Builder().build()
                                         .adapter(mapType);
-        listAdapter = new Moshi.Builder().build()
-                                         .adapter(listType);
+
     }
 
     /**
@@ -74,10 +69,8 @@ public enum OpenAIApi {
             assert resp.body() != null;
             String json = resp.body()
                               .string();
-            Map<String, Object> root = mapAdapter.fromJson(json);
-            assert root != null;
 
-            @SuppressWarnings("unchecked") List<Map<String, Object>> data = (List<Map<String, Object>>) root.get(DATA);
+            List<Map<String, Object>> data = extractListFromJsonField(json, DATA);
 
             return data.stream()
                        .map(m -> m.get(ID)
@@ -85,6 +78,24 @@ public enum OpenAIApi {
                        .toList();
         }
     }
+
+    /**
+     * Parses a JSON string and retrieves a list of maps located under a specified top-level field.
+     *
+     * @param json      The JSON string to parse.
+     * @param fieldName The field name whose value should be retrieved (expected to be a list).
+     * @return A list of maps extracted from the specified field.
+     * @throws IOException If parsing fails or if the JSON is invalid.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractListFromJsonField(String json, String fieldName) throws IOException {
+        Map<String, Object> root = mapAdapter.fromJson(json);
+        if (root == null) {
+            throw new IOException("Failed to parse JSON: root is null.");
+        }
+        return (List<Map<String, Object>>) root.get(fieldName);
+    }
+
 
     /**
      * Fetches detailed information for a specific model.
@@ -152,12 +163,8 @@ public enum OpenAIApi {
                 throw new OpenAiException(resp.code(), apiCode, msg);
             }
 
-            Map<String, Object> root = mapAdapter.fromJson(respBody);
-            assert root != null;
-
-            @SuppressWarnings("unchecked") List<Map<String, Object>> choices = (List<Map<String, Object>>) root.get(CHOICES);
-
-            Deque<Map<String, Object>> dq = new LinkedList<>(choices);
+            // Parse the response
+            Deque<Map<String, Object>> dq = new LinkedList<>(extractListFromJsonField(respBody, CHOICES));
             Map<String, Object> first = dq.getFirst();
 
             @SuppressWarnings("unchecked") Map<String, Object> message = (Map<String, Object>) first.get(MESSAGE);
