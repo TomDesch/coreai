@@ -152,15 +152,36 @@ public enum SessionManager implements Listener {
         }
     }
 
+    /**
+     * Sets and persists the player's API key securely.
+     *
+     * @param uuid   Player UUID
+     * @param apiKey The raw API key
+     */
     public void setPlayerAPIKey(UUID uuid, String apiKey) {
         playerKeys.put(uuid, apiKey);
+
         ChatAgent agent = agents.get(uuid);
         if (agent != null) {
             agent.setApiKey(apiKey);
         }
 
-        // fixme encrypt and save to disk
+        // Encrypt and save the API key to disk
+        try {
+            Plugin plugin = CoreAI.getInstance();
+            File keysFile = new File(plugin.getDataFolder(), KEYS_FILE_NAME);
+            FileConfiguration keysConfig = YamlConfiguration.loadConfiguration(keysFile);
+
+            CryptoUtil crypto = new CryptoUtil(new File(plugin.getDataFolder(), KEY_FILE_NAME));
+            String encrypted = crypto.encrypt(apiKey);
+
+            keysConfig.set(uuid.toString(), encrypted);
+            keysConfig.save(keysFile);
+        } catch (IOException e) {
+            CORE_AI_LOGGER.log(Level.SEVERE, "Failed to save player API key for " + uuid, e);
+        }
     }
+
 
     /**
      * Clears the agent when a player quits to free memory.
