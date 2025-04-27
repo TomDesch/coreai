@@ -2,9 +2,14 @@ package be.stealingdapenta.coreai.command;
 
 import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 import static be.stealingdapenta.coreai.service.OpenAIApi.OPEN_AI_API;
+import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_API_KEY_WITH_INSTRUCTIONS;
+import static be.stealingdapenta.coreai.util.ChatMessages.NO_PERMISSION;
+import static be.stealingdapenta.coreai.util.ChatMessages.PLAYERS_ONLY;
+import static be.stealingdapenta.coreai.util.ChatMessages.fetchingModelInfo;
+import static be.stealingdapenta.coreai.util.ChatMessages.ioError;
+import static be.stealingdapenta.coreai.util.ChatMessages.modelInfo;
+import static be.stealingdapenta.coreai.util.ChatMessages.openAiError;
 import static net.kyori.adventure.text.format.NamedTextColor.AQUA;
-import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
-import static net.kyori.adventure.text.format.NamedTextColor.RED;
 
 import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.permission.PermissionNode;
@@ -29,11 +34,11 @@ public class ModelInfoCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(Component.text("Only players can use this command.", RED));
+            sender.sendMessage(PLAYERS_ONLY);
             return true;
         }
         if (!player.hasPermission(PermissionNode.MODELS.node())) {
-            player.sendMessage(Component.text("You don't have permission to view model info.", RED));
+            player.sendMessage(NO_PERMISSION);
             return true;
         }
 
@@ -43,11 +48,11 @@ public class ModelInfoCommand implements CommandExecutor {
         String modelId = agent.getModel();
 
         if (apiKey == null || apiKey.isBlank()) {
-            player.sendMessage(Component.text("[CoreAI] You must set an API key first: /setapikey <key>", RED));
+            player.sendMessage(INVALID_API_KEY_WITH_INSTRUCTIONS);
             return true;
         }
 
-        player.sendMessage(Component.text("[CoreAI] Fetching info for model: " + modelId, GRAY));
+        player.sendMessage(fetchingModelInfo(modelId));
 
         // Async fetch model info
         Bukkit.getScheduler()
@@ -57,7 +62,7 @@ public class ModelInfoCommand implements CommandExecutor {
                       // On success, display all fields
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
-                                player.sendMessage(Component.text("[CoreAI] Model Info:", AQUA));
+                                player.sendMessage(modelInfo(modelId));
                                 info.forEach((key, value) -> {
                                     player.sendMessage(Component.text(key + ": " + value, AQUA));
                                 });
@@ -65,12 +70,12 @@ public class ModelInfoCommand implements CommandExecutor {
                   } catch (OpenAiException oae) {
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
-                                player.sendMessage(Component.text("[CoreAI] Error fetching model info: " + oae.getMessage(), RED));
+                                player.sendMessage(openAiError(oae));
                             });
                   } catch (IOException ioe) {
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
-                                player.sendMessage(Component.text("[CoreAI] Network error: " + ioe.getMessage(), RED));
+                                player.sendMessage(ioError(ioe));
                             });
                   }
               });

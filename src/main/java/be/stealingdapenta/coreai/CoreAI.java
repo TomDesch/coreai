@@ -6,8 +6,8 @@ import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 import be.stealingdapenta.coreai.command.ChatCommand;
 import be.stealingdapenta.coreai.command.ModelCommand;
 import be.stealingdapenta.coreai.command.ModelInfoCommand;
-import be.stealingdapenta.coreai.command.SetApiKeyCommand;
 import be.stealingdapenta.coreai.gui.ModelSelectorGUI;
+import be.stealingdapenta.coreai.listener.AsyncApiKeyListener;
 import java.util.Objects;
 import java.util.logging.Logger;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -47,6 +47,8 @@ public class CoreAI extends JavaPlugin {
         SESSION_MANAGER.initialize();
 
         // Register events
+        getServer().getPluginManager()
+                   .registerEvents(new AsyncApiKeyListener(), this); // this listener prevents the raw API key from appearing in the console when players run setapikey 'command'
         ModelSelectorGUI gui = new ModelSelectorGUI();
         getServer().getPluginManager()
                    .registerEvents(gui, this);
@@ -56,15 +58,10 @@ public class CoreAI extends JavaPlugin {
         // Register commands with proper executors
         Objects.requireNonNull(getCommand("chat"))
                .setExecutor(new ChatCommand());
-        Objects.requireNonNull(getCommand("setapikey"))
-               .setExecutor(new SetApiKeyCommand());
         Objects.requireNonNull(getCommand("models"))
                .setExecutor(new ModelCommand(gui));
         Objects.requireNonNull(getCommand("modelinfo"))
                .setExecutor(new ModelInfoCommand());
-
-
-
 
         CORE_AI_LOGGER.info(ANSI_GREEN + "CoreAI ready to roll!" + ANSI_RESET);
     }

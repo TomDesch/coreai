@@ -22,13 +22,6 @@ public class ConfigValue<T> {
     }
 
     /**
-     * Returns the configuration key path, e.g. "openai.api-key".
-     */
-    public String path() {
-        return path;
-    }
-
-    /**
      * Retrieves the value from config or returns the default.
      */
     public T get() {
@@ -37,13 +30,6 @@ public class ConfigValue<T> {
         if (cfg.contains(path)) {
             return reader.apply(cfg, path);
         }
-        return defaultValue;
-    }
-
-    /**
-     * Returns the default in-code value.
-     */
-    public T getDefault() {
         return defaultValue;
     }
 }

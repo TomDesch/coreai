@@ -9,7 +9,7 @@ An **extensible, AI-powered Minecraft toolkit** built on Spigot/Paper — bridgi
 ## 🚀 Features
 
 - **Interactive Chat**: `/chat <message>` engages ChatGPT with full conversation history and per-player API keys.
-- **Per-Player API Keys**: Securely store your own OpenAI key via `/setapikey <key>` (AES-GCM encrypted on disk) ⚠️ _Warning: server operators can still access your keys in logs_
+- **Per-Player API Keys**: Securely store your own OpenAI key via `setapikey` (AES-GCM encrypted on disk)
 - **Model Selection GUI**: `/models` opens a paginated inventory of available models; click to choose your active model.
 - **Model Details**: `/modelinfo` fetches and displays detailed metadata for the current model (engine, owner, permissions, etc.).
 - **Session Management**: Automatic agent creation and cleanup on player join/quit; per-player model overrides persisted across restarts.
@@ -50,12 +50,13 @@ openai:
 
 ## 🛠️ Usage
 ### Commands
-| Command         | Description                                                            | Permission            |
-|-----------------|------------------------------------------------------------------------|-----------------------|
-| `/setapikey <k>`| Store your personal OpenAI key securely (AES-GCM encrypted).   ⚠️ _Warning: server operators can still access your keys in logs_       | `coreai.setapikey`    |
-| `/chat <msg>`   | Chat with the AI, keeping full context.                                | `coreai.chat`         |
-| `/models`       | Open a paginated GUI to select available models for your key.         | `coreai.models`       |
-| `/modelinfo`    | Display detailed info about your current model (engine metadata).     | `coreai.modelinfo`       |
+
+| Command       | Description                                                       | Permission         |
+|---------------|-------------------------------------------------------------------|--------------------|
+| `setapikey`   | Store your personal OpenAI key securely (AES-GCM encrypted).      | `coreai.setapikey` |
+| `/chat <msg>` | Chat with the AI, keeping full context.                           | `coreai.chat`      |
+| `/models`     | Open a paginated GUI to select available models for your key.     | `coreai.models`    |
+| `/modelinfo`  | Display detailed info about your current model (engine metadata). | `coreai.modelinfo` |
 
 ### Permissions
 ```yaml

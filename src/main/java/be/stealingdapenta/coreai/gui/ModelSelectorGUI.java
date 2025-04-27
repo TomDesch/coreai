@@ -1,8 +1,8 @@
 package be.stealingdapenta.coreai.gui;
 
 import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
+import static be.stealingdapenta.coreai.util.ChatMessages.modelStored;
 import static net.kyori.adventure.text.format.NamedTextColor.AQUA;
-import static net.kyori.adventure.text.format.NamedTextColor.GOLD;
 import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
 
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ import org.jetbrains.annotations.NotNull;
  */
 public class ModelSelectorGUI implements Listener {
 
-    private static final String INVENTORY_TITLE = "Select AI Model";
+    private static final String INVENTORY_TITLE = "          Select AI Model";
     private static final Component TITLE_COMPONENT = Component.text(INVENTORY_TITLE, AQUA);
     private static final int SLOTS_PER_ROW = 9;
     private static final int MAX_SLOTS = 54;
@@ -122,8 +122,8 @@ public class ModelSelectorGUI implements Listener {
         if (nameComp == null) {
             return;
         }
-        String label = PlainTextComponentSerializer.plainText()
-                                                   .serialize(nameComp);
+        String chosenModel = PlainTextComponentSerializer.plainText()
+                                                         .serialize(nameComp);
 
         UUID uuid = player.getUniqueId();
         List<String> models = playerModels.get(uuid);
@@ -139,9 +139,9 @@ public class ModelSelectorGUI implements Listener {
         }
 
         // Model selection
-        SESSION_MANAGER.setPlayerModel(uuid, label);
+        SESSION_MANAGER.setPlayerModel(uuid, chosenModel);
 
         player.closeInventory();
-        player.sendMessage(Component.text("[CoreAI] Selected model stored: " + label, GOLD));
+        player.sendMessage(modelStored(chosenModel));
     }
 }

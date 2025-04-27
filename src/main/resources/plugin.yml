@@ -8,11 +8,6 @@ description: An extensible, AI-powered Minecraft toolkit that brings in-game ima
 website: https://www.stealingdapenta.be
 
 commands:
-  setapikey:
-    description: Set your OpenAI API key (player-specific, encrypted)
-    usage: /<command> <key>
-    permission: coreai.setapikey
-
   chat:
     description: Chat with the AI
     usage: /<command> <message>
