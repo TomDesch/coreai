@@ -1,5 +1,7 @@
 package be.stealingdapenta.coreai.service;
 
+import static be.stealingdapenta.coreai.config.Config.TIMEOUT_IMAGE_MS;
+
 import com.squareup.moshi.JsonAdapter;
 import com.squareup.moshi.Moshi;
 import com.squareup.moshi.Types;
@@ -191,6 +193,61 @@ public enum OpenAIApi {
         } catch (IOException ignored) {
         }
         throw new OpenAiException(status, "http_error", "HTTP " + status);
+    }
+
+    /**
+     * Generates an image based on the given prompt and returns the image URL.
+     *
+     * @param prompt The prompt to send to OpenAI for image generation.
+     * @param width  Desired image width in pixels (will be scaled down if unsupported).
+     * @param height Desired image height in pixels (will be scaled down if unsupported).
+     * @param apiKey OpenAI API key
+     * @return A direct URL to the generated image.
+     * @throws IOException     On network or API failure.
+     * @throws OpenAiException If OpenAI returns an error.
+     */
+    public String generateImage(String prompt, int width, int height, String apiKey) throws IOException, OpenAiException {
+        // DALL·E only supports 256, 512, or 1024 square outputs
+        int size = Math.min(Math.max(Math.min(width, height), 256), 1024);
+        if (size <= 512) {
+            size = 512;
+        } else {
+            size = 1024;
+        }
+
+        Map<String, Object> payload = Map.of("prompt", prompt, "n", 1, "size", size + "x" + size, "response_format", "url");
+
+        String json = mapAdapter.toJson(payload);
+        RequestBody body = RequestBody.create(json, MediaType.get(CONTENT_TYPE));
+
+        Request request = new Request.Builder().url("https://api.openai.com/v1/images/generations")
+                                               .addHeader(AUTHORIZATION, BEARER + apiKey)
+                                               .post(body)
+                                               .build();
+
+        OkHttpClient timed = new OkHttpClient.Builder().connectTimeout(60, TimeUnit.SECONDS)
+                                                       .readTimeout(TIMEOUT_IMAGE_MS.get(), TimeUnit.MILLISECONDS)
+                                                       .writeTimeout(TIMEOUT_IMAGE_MS.get(), TimeUnit.MILLISECONDS)
+                                                       .callTimeout(TIMEOUT_IMAGE_MS.get(), TimeUnit.MILLISECONDS)
+                                                       .build();
+
+        try (Response response = timed.newCall(request)
+                                      .execute()) {
+            String respBody = response.body() != null ? response.body()
+                                                                .string() : "";
+            if (!response.isSuccessful()) {
+                throwOpenAiError(response.code(), respBody);
+            }
+
+            List<Map<String, Object>> data = extractListFromJsonField(respBody, DATA);
+            if (data.isEmpty() || !data.getFirst()
+                                       .containsKey("url")) {
+                throw new IOException("No image URL returned");
+            }
+            return data.getFirst()
+                       .get("url")
+                       .toString();
+        }
     }
 
 }

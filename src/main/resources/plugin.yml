@@ -1,5 +1,5 @@
 name: CoreAI
-version: '1.1.2'
+version: '1.1.3'
 main: be.stealingdapenta.coreai.CoreAI
 api-version: '1.21'
 load: STARTUP
@@ -28,6 +28,11 @@ commands:
     usage: /<command> <image-url> [<columns>x<rows>]
     permission: coreai.imagemap
 
+  imagegenmap:
+    description: Generate a map based on a prompt you provided
+    usage: /<command> <prompt> [<columns>x<rows>]
+    permission: coreai.imagegenmap
+
 permissions:
   coreai.setapikey:
     description: Allows setting your personal OpenAI API key
@@ -42,5 +47,8 @@ permissions:
     description: Allows using /modelinfo to show your current AI model and key info
     default: true
   coreai.imagemap:
-    description: Allows using /imagemap to generate an image from a prompt
+    description: Allows using /imagemap to generate a map from an image url
+    default: true
+  coreai.imagegenmap:
+    description: Allows using /imagegenmap to generate a map from a prompt
     default: true

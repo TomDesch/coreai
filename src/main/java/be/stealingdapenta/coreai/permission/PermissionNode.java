@@ -27,7 +27,12 @@ public enum PermissionNode {
     /**
      * Allows using the /imagemap command to create a map from an image URL.
      */
-    IMAGE_MAP("coreai.imagemap");
+    IMAGE_MAP("coreai.imagemap"),
+
+    /**
+     * Allows using the /imagegenmap command to create a map from an image URL.
+     */
+    IMAGE_GEN_MAP("coreai.imagegenmap");
 
     private final String node;
 

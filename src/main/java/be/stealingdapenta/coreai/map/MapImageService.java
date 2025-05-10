@@ -1,9 +1,17 @@
 package be.stealingdapenta.coreai.map;
 
+import static net.kyori.adventure.text.Component.text;
+import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
+
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
+import java.util.Map;
+import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.MapMeta;
 import org.bukkit.map.MapCanvas;
 import org.bukkit.map.MapPalette;
 import org.bukkit.map.MapRenderer;
@@ -87,4 +95,42 @@ public final class MapImageService {
             }
         };
     }
+
+    /**
+     * Creates a single filled map item from a tile image, with correct metadata and display name.
+     *
+     * @param player the player receiving the map
+     * @param tile   the tile image to render
+     * @param row    the row index (0-based)
+     * @param col    the column index (0-based)
+     * @return the generated map item
+     */
+    public static ItemStack createMapItem(Player player, BufferedImage tile, int row, int col) {
+        MapView mapView = Bukkit.createMap(player.getWorld());
+        mapView.getRenderers()
+               .clear();
+        mapView.addRenderer(rendererFrom(tile));
+
+        ItemStack mapItem = new ItemStack(Material.FILLED_MAP);
+        MapMeta meta = (MapMeta) mapItem.getItemMeta();
+        meta.setMapView(mapView);
+        meta.displayName(text("Map col: " + (col + 1) + ", row: " + (row + 1), GRAY));
+        mapItem.setItemMeta(meta);
+
+        return mapItem;
+    }
+
+    public static void addMapToInventory(Player player, int finalWidth, int finalHeight, BufferedImage[][] tiles) {
+        for (int row = 0; row < finalHeight; row++) {
+            for (int col = 0; col < finalWidth; col++) {
+                ItemStack mapItem = MapImageService.createMapItem(player, tiles[row][col], row, col);
+                Map<Integer, ItemStack> leftovers = player.getInventory()
+                                                          .addItem(mapItem);
+                leftovers.values()
+                         .forEach(left -> player.getWorld()
+                                                .dropItemNaturally(player.getLocation(), left));
+            }
+        }
+    }
+
 }
