@@ -5,6 +5,7 @@ import static net.kyori.adventure.text.format.NamedTextColor.DARK_AQUA;
 import static net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY;
 import static net.kyori.adventure.text.format.NamedTextColor.GOLD;
 import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
+import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
 import static net.kyori.adventure.text.format.NamedTextColor.RED;
 
 import be.stealingdapenta.coreai.service.OpenAiException;
@@ -56,6 +57,34 @@ public final class ChatMessages {
                                                                             .coreAIPrefix()
                                                                             .append("Fetching available models...", AQUA)
                                                                             .build();
+
+    public static final Component INVALID_SIZE_NUMBER = TextBuilder.TEXT_BUILDER.reset()
+                                                                                .coreAIPrefix()
+                                                                                .append("Invalid numbers in size. Use integers like 2x2.", RED)
+                                                                                .build();
+
+    public static final Component INVALID_DIMENSIONS = TextBuilder.TEXT_BUILDER.reset()
+                                                                               .coreAIPrefix()
+                                                                               .append("Invalid dimensions. Use format like 2x2.", RED)
+                                                                               .build();
+
+    public static final Component DOWNLOADING_IMAGE = TextBuilder.TEXT_BUILDER.reset()
+                                                                              .coreAIPrefix()
+                                                                              .append("Downloading and processing image...", AQUA)
+                                                                              .build();
+
+    public static final Component GENERATING_AI_IMAGE = TextBuilder.TEXT_BUILDER.reset()
+                                                                                .coreAIPrefix()
+                                                                                .append("Generating image with AI...", AQUA)
+                                                                                .build();
+
+    public static final Component IMAGE_GENERATION_ERROR = TextBuilder.TEXT_BUILDER.reset()
+                                                                                   .coreAIPrefix()
+                                                                                   .append("Error generating image. Please check your server logs to find out why.", RED)
+                                                                                   .build();
+
+
+
 
     private ChatMessages() {
         // Utility class
@@ -147,4 +176,38 @@ public final class ChatMessages {
                                        .append(model, DARK_AQUA)
                                        .build();
     }
+
+    public static Component imageMapCreated(int count) {
+        return TextBuilder.TEXT_BUILDER.reset()
+                                       .coreAIPrefix()
+                                       .append("Generated ", GREEN)
+                                       .append(count + "", AQUA)
+                                       .append(" map tile(s) and added to your inventory.", GREEN)
+                                       .build();
+    }
+
+    public static Component imageMapGeneratedFromAI(int count) {
+        return TextBuilder.TEXT_BUILDER.reset()
+                                       .coreAIPrefix()
+                                       .append("Generated AI image as ", GREEN)
+                                       .append(String.valueOf(count), AQUA)
+                                       .append(" connecting map tiles.", GREEN)
+                                       .build();
+    }
+
+    public static Component mapCreationFailure(String message) {
+        return TextBuilder.TEXT_BUILDER.reset()
+                                       .coreAIPrefix()
+                                       .append("Failed to create image map: ", RED)
+                                       .append(message, GRAY)
+                                       .build();
+    }
+
+    public static Component usageImageMapCommand(String label, String followUp) {
+        return TextBuilder.TEXT_BUILDER.reset()
+                                       .coreAIPrefix()
+                                       .append("Usage: /" + label + " [WxH] " + followUp, GRAY)
+                                       .build();
+    }
+
 }

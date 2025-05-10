@@ -1,20 +1,19 @@
 package be.stealingdapenta.coreai.command;
 
 import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
-import static be.stealingdapenta.coreai.map.MapImageService.addMapToInventory;
+import static be.stealingdapenta.coreai.map.MapImageService.MAP_IMAGE_SERVICE;
 import static be.stealingdapenta.coreai.permission.PermissionNode.IMAGE_MAP;
+import static be.stealingdapenta.coreai.util.ChatMessages.GENERATING_AI_IMAGE;
+import static be.stealingdapenta.coreai.util.ChatMessages.IMAGE_GENERATION_ERROR;
 import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_API_KEY_WITH_INSTRUCTIONS;
+import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_DIMENSIONS;
 import static be.stealingdapenta.coreai.util.ChatMessages.NO_PERMISSION;
 import static be.stealingdapenta.coreai.util.ChatMessages.PLAYERS_ONLY;
-import static net.kyori.adventure.text.Component.text;
-import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
-import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
-import static net.kyori.adventure.text.format.NamedTextColor.RED;
-import static net.kyori.adventure.text.format.NamedTextColor.YELLOW;
+import static be.stealingdapenta.coreai.util.ChatMessages.imageMapGeneratedFromAI;
+import static be.stealingdapenta.coreai.util.ChatMessages.usageImageMapCommand;
 
 import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.manager.SessionManager;
-import be.stealingdapenta.coreai.map.MapImageService;
 import be.stealingdapenta.coreai.service.ChatAgent;
 import be.stealingdapenta.coreai.service.OpenAIApi;
 import java.awt.image.BufferedImage;
@@ -30,7 +29,7 @@ import org.jetbrains.annotations.NotNull;
 public class ImageGenMapCommand implements CommandExecutor {
 
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String[] args) {
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage(PLAYERS_ONLY);
             return true;
@@ -42,7 +41,7 @@ public class ImageGenMapCommand implements CommandExecutor {
         }
 
         if (args.length < 1) {
-            player.sendMessage(text("Usage: /" + label + " [WxH] <prompt>", GRAY));
+            player.sendMessage(usageImageMapCommand(label, "<prompt>"));
             return true;
         }
 
@@ -64,7 +63,7 @@ public class ImageGenMapCommand implements CommandExecutor {
                 width = Integer.parseInt(dims[0]);
                 height = Integer.parseInt(dims[1]);
             } catch (NumberFormatException e) {
-                player.sendMessage(text("Invalid dimensions. Use format like 2x2.", RED));
+                player.sendMessage(INVALID_DIMENSIONS);
                 return true;
             }
             prompt = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
@@ -76,7 +75,7 @@ public class ImageGenMapCommand implements CommandExecutor {
         final int finalHeight = height;
         final int amount = finalWidth * finalHeight;
 
-        player.sendMessage(text("[CoreAI] Generating image with AI...", YELLOW));
+        player.sendMessage(GENERATING_AI_IMAGE);
 
         Bukkit.getScheduler()
               .runTaskAsynchronously(CoreAI.getInstance(), () -> {
@@ -84,24 +83,22 @@ public class ImageGenMapCommand implements CommandExecutor {
                       String imageUrl = OpenAIApi.OPEN_AI_API.generateImage(prompt, finalWidth * 128, finalHeight * 128, key);
                       BufferedImage img = ImageIO.read(java.net.URI.create(imageUrl)
                                                                    .toURL());
-                      BufferedImage scaled = MapImageService.resizeToGrid(img, finalWidth, finalHeight);
-                      BufferedImage[][] tiles = MapImageService.splitIntoTiles(scaled, finalWidth, finalHeight);
+                      BufferedImage scaled = MAP_IMAGE_SERVICE.resizeToGrid(img, finalWidth, finalHeight);
+                      BufferedImage[][] tiles = MAP_IMAGE_SERVICE.splitIntoTiles(scaled, finalWidth, finalHeight);
 
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
-                                addMapToInventory(player, finalWidth, finalHeight, tiles);
-                                player.sendMessage(text("[CoreAI] Generated AI image as " + amount + " connecting map tiles.", GREEN));
+                                MAP_IMAGE_SERVICE.addMapToInventory(player, finalWidth, finalHeight, tiles);
+                                player.sendMessage(imageMapGeneratedFromAI(amount));
                             });
 
                   } catch (Exception e) {
                       CORE_AI_LOGGER.warning("Failed to generate AI image: " + e.getMessage());
                       CORE_AI_LOGGER.warning(Arrays.toString(e.getStackTrace()));
-                      player.sendMessage(text("[CoreAI] Error generating image. Please check your server logs to find out why.", RED));
+                      player.sendMessage(IMAGE_GENERATION_ERROR);
                   }
               });
 
         return true;
     }
-
-
 }

@@ -1,19 +1,20 @@
 package be.stealingdapenta.coreai.command;
 
 import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
-import static be.stealingdapenta.coreai.map.MapImageService.addMapToInventory;
+import static be.stealingdapenta.coreai.map.MapImageService.MAP_IMAGE_SERVICE;
 import static be.stealingdapenta.coreai.permission.PermissionNode.IMAGE_MAP;
+import static be.stealingdapenta.coreai.util.ChatMessages.DOWNLOADING_IMAGE;
+import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_DIMENSIONS;
+import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_SIZE_NUMBER;
 import static be.stealingdapenta.coreai.util.ChatMessages.NO_PERMISSION;
 import static be.stealingdapenta.coreai.util.ChatMessages.PLAYERS_ONLY;
-import static net.kyori.adventure.text.Component.text;
-import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
-import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
-import static net.kyori.adventure.text.format.NamedTextColor.RED;
-import static net.kyori.adventure.text.format.NamedTextColor.YELLOW;
+import static be.stealingdapenta.coreai.util.ChatMessages.imageMapCreated;
+import static be.stealingdapenta.coreai.util.ChatMessages.mapCreationFailure;
+import static be.stealingdapenta.coreai.util.ChatMessages.usageImageMapCommand;
 
 import be.stealingdapenta.coreai.CoreAI;
-import be.stealingdapenta.coreai.map.MapImageService;
 import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import javax.imageio.ImageIO;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -37,7 +38,7 @@ public class ImageMapCommand implements CommandExecutor {
         }
 
         if (args.length < 1 || args.length > 2) {
-            player.sendMessage(text("Usage: /" + label + " [WxH] <image-url>", GRAY));
+            player.sendMessage(usageImageMapCommand(label, "<image-url>"));
             return true;
         }
 
@@ -49,7 +50,7 @@ public class ImageMapCommand implements CommandExecutor {
             String[] dims = args[0].toLowerCase()
                                    .split("x");
             if (dims.length != 2) {
-                player.sendMessage(text("Invalid size format. Use format WxH (e.g., 2x3)", RED));
+                player.sendMessage(INVALID_DIMENSIONS);
                 return true;
             }
 
@@ -57,7 +58,7 @@ public class ImageMapCommand implements CommandExecutor {
                 width = Integer.parseInt(dims[0]);
                 height = Integer.parseInt(dims[1]);
             } catch (NumberFormatException e) {
-                player.sendMessage(text("Invalid numbers in size. Use integers like 2x2.", RED));
+                player.sendMessage(INVALID_SIZE_NUMBER);
                 return true;
             }
 
@@ -66,7 +67,7 @@ public class ImageMapCommand implements CommandExecutor {
             url = args[0];
         }
 
-        player.sendMessage(text("[CoreAI] Downloading and processing image...", YELLOW));
+        player.sendMessage(DOWNLOADING_IMAGE);
 
         final int finalWidth = width;
         final int finalHeight = height;
@@ -80,18 +81,19 @@ public class ImageMapCommand implements CommandExecutor {
                           throw new IllegalArgumentException("Invalid image format or unreachable URL.");
                       }
 
-                      BufferedImage gridImage = MapImageService.resizeToGrid(img, finalWidth, finalHeight);
-                      BufferedImage[][] tiles = MapImageService.splitIntoTiles(gridImage, finalWidth, finalHeight);
+                      BufferedImage gridImage = MAP_IMAGE_SERVICE.resizeToGrid(img, finalWidth, finalHeight);
+                      BufferedImage[][] tiles = MAP_IMAGE_SERVICE.splitIntoTiles(gridImage, finalWidth, finalHeight);
 
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
-                                addMapToInventory(player, finalWidth, finalHeight, tiles);
+                                MAP_IMAGE_SERVICE.addMapToInventory(player, finalWidth, finalHeight, tiles);
 
-                                player.sendMessage(text("[CoreAI] Generated " + (finalWidth * finalHeight) + " map tile(s) and added to your inventory.", GREEN));
+                                player.sendMessage(imageMapCreated((finalWidth * finalHeight)));
                             });
                   } catch (Exception e) {
                       CORE_AI_LOGGER.warning("Failed to process image map: " + e.getMessage());
-                      player.sendMessage(text("[CoreAI] Failed to create image map: " + e.getMessage(), RED));
+                      CORE_AI_LOGGER.warning(Arrays.toString(e.getStackTrace()));
+                      player.sendMessage(mapCreationFailure(e.getMessage()));
                   }
               });
 

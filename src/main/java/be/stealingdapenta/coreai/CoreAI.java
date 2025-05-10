@@ -2,6 +2,7 @@ package be.stealingdapenta.coreai;
 
 import static be.stealingdapenta.coreai.config.Config.API_KEY;
 import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
+import static be.stealingdapenta.coreai.map.MapStorage.MAP_STORAGE;
 
 import be.stealingdapenta.coreai.command.ChatCommand;
 import be.stealingdapenta.coreai.command.ImageGenMapCommand;
@@ -45,8 +46,10 @@ public class CoreAI extends JavaPlugin {
 
         validateDefaultAPIKey();
 
-        // Initialize the SessionManager
+        // Initialize the SessionManager and MapStorage
         SESSION_MANAGER.initialize();
+        MAP_STORAGE.initialize();
+        MAP_STORAGE.restoreAllMapRenderers();
 
         // Register events
         getServer().getPluginManager()
@@ -68,6 +71,8 @@ public class CoreAI extends JavaPlugin {
                .setExecutor(new ImageMapCommand());
         Objects.requireNonNull(getCommand("imagegenmap"))
                .setExecutor(new ImageGenMapCommand());
+
+        MAP_STORAGE.restoreAllMapRenderers();
 
         CORE_AI_LOGGER.info(ANSI_GREEN + "CoreAI ready to roll!" + ANSI_RESET);
     }
