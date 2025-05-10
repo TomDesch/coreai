@@ -19,14 +19,29 @@ public final class MapImageService {
     }
 
     /**
-     * Resizes an input image to the Minecraft map resolution (128x128).
+     * Resizes an image to exactly 128x128 pixels.
      *
-     * @param image the original image
-     * @return a resized version for map rendering
+     * @param image The input image.
+     * @return A new resized BufferedImage.
      */
     public static BufferedImage resizeToMap(BufferedImage image) {
-        Image scaled = image.getScaledInstance(MAP_WIDTH, MAP_HEIGHT, Image.SCALE_SMOOTH);
-        BufferedImage resized = new BufferedImage(MAP_WIDTH, MAP_HEIGHT, BufferedImage.TYPE_INT_RGB);
+        return resizeToGrid(image, 1, 1);
+    }
+
+    /**
+     * Resizes an image to fit a specific grid of maps (columns × rows).
+     *
+     * @param image The input image.
+     * @param cols  Number of horizontal maps.
+     * @param rows  Number of vertical maps.
+     * @return A new resized BufferedImage.
+     */
+    public static BufferedImage resizeToGrid(BufferedImage image, int cols, int rows) {
+        int width = cols * MAP_WIDTH;
+        int height = rows * MAP_HEIGHT;
+
+        Image scaled = image.getScaledInstance(width, height, Image.SCALE_SMOOTH);
+        BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = resized.createGraphics();
         g.drawImage(scaled, 0, 0, null);
         g.dispose();
@@ -34,10 +49,28 @@ public final class MapImageService {
     }
 
     /**
-     * Creates a MapRenderer that draws the provided image once.
+     * Splits an image into map-sized 128×128 tiles.
      *
-     * @param image the image to render
-     * @return a one-time MapRenderer
+     * @param largeImage The image sized to the full grid.
+     * @param columns    Number of columns.
+     * @param rows       Number of rows.
+     * @return A 2D array of BufferedImages [row][column].
+     */
+    public static BufferedImage[][] splitIntoTiles(BufferedImage largeImage, int columns, int rows) {
+        BufferedImage[][] tiles = new BufferedImage[rows][columns];
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < columns; col++) {
+                tiles[row][col] = largeImage.getSubimage(col * MAP_WIDTH, row * MAP_HEIGHT, MAP_WIDTH, MAP_HEIGHT);
+            }
+        }
+        return tiles;
+    }
+
+    /**
+     * Creates a one-time MapRenderer for rendering a static image to a map.
+     *
+     * @param image The image to render.
+     * @return A custom MapRenderer.
      */
     public static MapRenderer rendererFrom(BufferedImage image) {
         return new MapRenderer() {

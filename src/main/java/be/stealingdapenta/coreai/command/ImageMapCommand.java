@@ -39,39 +39,77 @@ public class ImageMapCommand implements CommandExecutor {
             return true;
         }
 
-        if (args.length != 1) {
-            player.sendMessage(text("Usage: /" + label + " <image-url>", GRAY));
+        if (args.length < 1 || args.length > 2) {
+            player.sendMessage(text("Usage: /" + label + " [WxH] <image-url>", GRAY));
             return true;
         }
 
-        String url = args[0];
-        player.sendMessage(text("[CoreAI] Downloading image...", YELLOW));
+        int width = 1;
+        int height = 1;
+        String url;
+
+        if (args.length == 2) {
+            String[] dims = args[0].toLowerCase()
+                                   .split("x");
+            if (dims.length != 2) {
+                player.sendMessage(text("Invalid size format. Use format WxH (e.g., 2x3)", RED));
+                return true;
+            }
+
+            try {
+                width = Integer.parseInt(dims[0]);
+                height = Integer.parseInt(dims[1]);
+            } catch (NumberFormatException e) {
+                player.sendMessage(text("Invalid numbers in size. Use integers like 2x2.", RED));
+                return true;
+            }
+
+            url = args[1];
+        } else {
+            url = args[0];
+        }
+
+        player.sendMessage(text("[CoreAI] Downloading and processing image...", YELLOW));
+
+        final int finalWidth = width;
+        final int finalHeight = height;
 
         Bukkit.getScheduler()
               .runTaskAsynchronously(CoreAI.getInstance(), () -> {
                   try {
                       BufferedImage img = ImageIO.read(java.net.URI.create(url)
                                                                    .toURL());
-                      BufferedImage scaled = MapImageService.resizeToMap(img);
+                      if (img == null) {
+                          throw new IllegalArgumentException("Invalid image format or unreachable URL.");
+                      }
+
+                      BufferedImage gridImage = MapImageService.resizeToGrid(img, finalWidth, finalHeight);
+                      BufferedImage[][] tiles = MapImageService.splitIntoTiles(gridImage, finalWidth, finalHeight);
 
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
-                                MapView mapView = Bukkit.createMap(player.getWorld());
-                                mapView.getRenderers()
-                                       .clear();
-                                mapView.addRenderer(MapImageService.rendererFrom(scaled));
+                                for (int row = 0; row < finalHeight; row++) {
+                                    for (int col = 0; col < finalWidth; col++) {
+                                        BufferedImage tile = tiles[row][col];
+                                        MapView mapView = Bukkit.createMap(player.getWorld());
+                                        mapView.getRenderers()
+                                               .clear();
+                                        mapView.addRenderer(MapImageService.rendererFrom(tile));
 
-                                ItemStack mapItem = new ItemStack(Material.FILLED_MAP);
-                                MapMeta meta = (MapMeta) mapItem.getItemMeta();
-                                meta.setMapView(mapView);
-                                mapItem.setItemMeta(meta);
-                                player.getInventory()
-                                      .addItem(mapItem);
+                                        ItemStack mapItem = new ItemStack(Material.FILLED_MAP);
+                                        MapMeta meta = (MapMeta) mapItem.getItemMeta();
+                                        meta.setMapView(mapView);
+                                        mapItem.setItemMeta(meta);
 
-                                player.sendMessage(text("[CoreAI] Image map created and added to your inventory.", GREEN));
+                                        player.getInventory()
+                                              .addItem(mapItem);
+                                    }
+                                }
+
+                                player.sendMessage(text("[CoreAI] Generated " + (finalWidth * finalHeight) + " map tile(s) and added to your inventory.", GREEN));
                             });
                   } catch (Exception e) {
-                      CORE_AI_LOGGER.warning(e.getMessage());
+                      CORE_AI_LOGGER.warning("Failed to process image map: " + e.getMessage());
                       player.sendMessage(text("[CoreAI] Failed to create image map: " + e.getMessage(), RED));
                   }
               });

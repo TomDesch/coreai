@@ -1,5 +1,5 @@
 name: CoreAI
-version: '1.1.0'
+version: '1.1.1'
 main: be.stealingdapenta.coreai.CoreAI
 api-version: '1.21'
 load: STARTUP
@@ -25,7 +25,7 @@ commands:
 
   imagemap:
     description: Generate a map based on an image you provided
-    usage: /<command> <prompt>
+    usage: /<command> <image-url> [<columns>x<rows>]
     permission: coreai.imagemap
 
 permissions:
