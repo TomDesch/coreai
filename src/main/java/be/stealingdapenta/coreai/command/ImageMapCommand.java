@@ -13,6 +13,7 @@ import static net.kyori.adventure.text.format.NamedTextColor.YELLOW;
 import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.map.MapImageService;
 import java.awt.image.BufferedImage;
+import java.util.Map;
 import javax.imageio.ImageIO;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -99,12 +100,21 @@ public class ImageMapCommand implements CommandExecutor {
                                         ItemStack mapItem = new ItemStack(Material.FILLED_MAP);
                                         MapMeta meta = (MapMeta) mapItem.getItemMeta();
                                         meta.setMapView(mapView);
+                                        meta.displayName(text("Map col: " + (col + 1) + ", row: " + (row + 1), GRAY));
                                         mapItem.setItemMeta(meta);
 
-                                        player.getInventory()
-                                              .addItem(mapItem);
+                                        // Attempt to add to inventory or drop on the ground if full
+                                        Map<Integer, ItemStack> leftovers = player.getInventory()
+                                                                                  .addItem(mapItem);
+                                        if (!leftovers.isEmpty()) {
+                                            for (ItemStack leftover : leftovers.values()) {
+                                                player.getWorld()
+                                                      .dropItemNaturally(player.getLocation(), leftover);
+                                            }
+                                        }
                                     }
                                 }
+
 
                                 player.sendMessage(text("[CoreAI] Generated " + (finalWidth * finalHeight) + " map tile(s) and added to your inventory.", GREEN));
                             });
