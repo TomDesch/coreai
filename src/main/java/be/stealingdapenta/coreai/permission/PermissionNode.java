@@ -22,7 +22,12 @@ public enum PermissionNode {
     /**
      * Allows using the /modelinfo command to set the AI model.
      */
-    MODEL_INFO("coreai.modelinfo");
+    MODEL_INFO("coreai.modelinfo"),
+
+    /**
+     * Allows using the /imagemap command to create a map from an image URL.
+     */
+    IMAGE_MAP("coreai.imagemap");
 
     private final String node;
 

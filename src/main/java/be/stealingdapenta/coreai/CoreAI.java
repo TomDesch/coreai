@@ -4,6 +4,7 @@ import static be.stealingdapenta.coreai.config.Config.API_KEY;
 import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 
 import be.stealingdapenta.coreai.command.ChatCommand;
+import be.stealingdapenta.coreai.command.ImageMapCommand;
 import be.stealingdapenta.coreai.command.ModelCommand;
 import be.stealingdapenta.coreai.command.ModelInfoCommand;
 import be.stealingdapenta.coreai.gui.ModelSelectorGUI;
@@ -62,6 +63,8 @@ public class CoreAI extends JavaPlugin {
                .setExecutor(new ModelCommand(gui));
         Objects.requireNonNull(getCommand("modelinfo"))
                .setExecutor(new ModelInfoCommand());
+        Objects.requireNonNull(getCommand("imagemap"))
+               .setExecutor(new ImageMapCommand());
 
         CORE_AI_LOGGER.info(ANSI_GREEN + "CoreAI ready to roll!" + ANSI_RESET);
     }
