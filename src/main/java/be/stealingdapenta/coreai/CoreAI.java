@@ -11,8 +11,10 @@ import be.stealingdapenta.coreai.command.ModelCommand;
 import be.stealingdapenta.coreai.command.ModelInfoCommand;
 import be.stealingdapenta.coreai.gui.ModelSelectorGUI;
 import be.stealingdapenta.coreai.listener.AsyncApiKeyListener;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.logging.Logger;
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -48,8 +50,20 @@ public class CoreAI extends JavaPlugin {
 
         // Initialize the SessionManager and MapStorage
         SESSION_MANAGER.initialize();
+
         MAP_STORAGE.initialize();
-        MAP_STORAGE.restoreAllMapRenderers();
+        // Schedule renderers to be restored after worlds are ready,
+        // The server does not begin ticking until after all plugins are enabled and all worlds are fully loaded.
+        Bukkit.getScheduler()
+              .runTask(this, () -> {
+                  try {
+                      MAP_STORAGE.restoreAllMapRenderers();
+                      CORE_AI_LOGGER.info("Restored all map renderers.");
+                  } catch (Exception e) {
+                      CORE_AI_LOGGER.severe("Failed to initialize map storage: " + e.getMessage());
+                      CORE_AI_LOGGER.info(Arrays.toString(e.getStackTrace()));
+                  }
+              });
 
         // Register events
         getServer().getPluginManager()
@@ -72,15 +86,13 @@ public class CoreAI extends JavaPlugin {
         Objects.requireNonNull(getCommand("imagegenmap"))
                .setExecutor(new ImageGenMapCommand());
 
-        MAP_STORAGE.restoreAllMapRenderers();
-
         CORE_AI_LOGGER.info(ANSI_GREEN + "CoreAI ready to roll!" + ANSI_RESET);
     }
 
     private void validateDefaultAPIKey() {
         if (API_KEY.get()
                    .isEmpty()) {
-            CORE_AI_LOGGER.severe(ANSI_RED + "No OpenAI API key set! Please fill openai.api-key in config.yml, or have players specify them individually!" + ANSI_RESET);
+            CORE_AI_LOGGER.info(ANSI_RED + "No OpenAI API key set! Please fill openai.api-key in config.yml, or have players specify them individually!" + ANSI_RESET);
         }
     }
 

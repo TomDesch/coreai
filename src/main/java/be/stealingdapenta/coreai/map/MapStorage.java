@@ -81,7 +81,7 @@ public enum MapStorage {
         for (Map.Entry<Integer, BufferedImage> entry : mapImages.entrySet()) {
             int id = entry.getKey();
             BufferedImage image = entry.getValue();
-            MapView view = Bukkit.getMap(id);
+            MapView view = Bukkit.getMap(id); // fixme here
             if (view != null) {
                 view.getRenderers()
                     .clear();

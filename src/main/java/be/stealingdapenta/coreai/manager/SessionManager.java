@@ -58,10 +58,10 @@ public enum SessionManager implements Listener {
      * Initializes the session manager: load persisted models and keys, and register listener.
      */
     public void initialize() {
-        loadModelOverrides();
-        loadStoredAPIKeys();
         this.crypto = new CryptoUtil(new File(CoreAI.getInstance()
                                                     .getDataFolder(), KEY_FILE_NAME));
+        loadModelOverrides();
+        loadStoredAPIKeys();
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
