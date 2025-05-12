@@ -80,6 +80,7 @@ public class ImageGenMapCommand implements CommandExecutor {
         Bukkit.getScheduler()
               .runTaskAsynchronously(CoreAI.getInstance(), () -> {
                   try {
+                      long startTime = System.currentTimeMillis();
                       String imageUrl = OpenAIApi.OPEN_AI_API.generateImage(prompt, finalWidth * 128, finalHeight * 128, key);
                       BufferedImage img = ImageIO.read(java.net.URI.create(imageUrl)
                                                                    .toURL());
@@ -88,8 +89,10 @@ public class ImageGenMapCommand implements CommandExecutor {
 
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
+                                long endTime = System.currentTimeMillis();
+                                long duration = endTime - startTime;
                                 MAP_IMAGE_SERVICE.addMapToInventory(player, finalWidth, finalHeight, tiles);
-                                player.sendMessage(imageMapGeneratedFromAI(amount));
+                                player.sendMessage(imageMapGeneratedFromAI(amount, duration));
                             });
 
                   } catch (Exception e) {

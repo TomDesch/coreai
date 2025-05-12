@@ -186,12 +186,15 @@ public final class ChatMessages {
                                        .build();
     }
 
-    public static Component imageMapGeneratedFromAI(int count) {
+    public static Component imageMapGeneratedFromAI(int count, long durationMs) {
+        String formattedDuration = String.format("%.2f", durationMs / 1000.0);
         return TextBuilder.TEXT_BUILDER.reset()
                                        .coreAIPrefix()
                                        .append("Generated AI image as ", GREEN)
                                        .append(String.valueOf(count), AQUA)
-                                       .append(" connecting map tiles.", GREEN)
+                                       .append(" connecting map tiles, in ", GREEN)
+                                       .append(formattedDuration, AQUA)
+                                       .append(" seconds.", GREEN)
                                        .build();
     }
 
