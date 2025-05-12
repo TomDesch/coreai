@@ -40,8 +40,12 @@ public class CoreAI extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
-        // Ensure default config is created
+        // Save the default config if missing
         saveDefaultConfig();
+        // Merge new defaults from the plugin jar without overwriting existing values
+        getConfig().options()
+                   .copyDefaults(true);
+        saveConfig(); // Persist merged values to disk
 
         CORE_AI_LOGGER = this.getLogger();
         CORE_AI_LOGGER.info(ANSI_YELLOW + "Enabling CoreAI" + ANSI_RESET);
