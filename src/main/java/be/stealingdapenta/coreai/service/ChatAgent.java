@@ -8,21 +8,18 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Represents a per-player conversation agent.
  */
 public class ChatAgent {
 
-    private final UUID playerId; // todo this is never used?
     private final Deque<Map<String, Object>> history = new ArrayDeque<>();
     private String apiKey;
     private String model;
     private final int timeoutMs;
 
-    public ChatAgent(UUID playerId, String apiKey, String model, int timeoutMs) {
-        this.playerId = playerId;
+    public ChatAgent(String apiKey, String model, int timeoutMs) {
         this.apiKey = apiKey;
         this.model = model;
         this.timeoutMs = timeoutMs;
@@ -90,6 +87,6 @@ public class ChatAgent {
 
     @Override
     public String toString() {
-        return "ChatAgent{" + "playerId=" + playerId + ", history=" + history + ", apiKey='" + apiKey + '\'' + ", model='" + model + '\'' + ", timeoutMs=" + timeoutMs + '}';
+        return "ChatAgent{history=" + history + ", apiKey='" + apiKey + '\'' + ", model='" + model + '\'' + ", timeoutMs=" + timeoutMs + '}';
     }
 }

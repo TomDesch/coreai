@@ -129,7 +129,7 @@ public enum SessionManager implements Listener {
             String apiKey = playerKeys.getOrDefault(id, API_KEY.get());
             String model = playerChosenModels.getOrDefault(id, MODEL.get());
             int timeout = TIMEOUT_MS.get();
-            return new ChatAgent(id, apiKey, model, timeout);
+            return new ChatAgent(apiKey, model, timeout);
         });
     }
 
