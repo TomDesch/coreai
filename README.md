@@ -1,19 +1,41 @@
 # CoreAI
 
-[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.4-blue)](https://papermc.io/) [![Java 21](https://img.shields.io/badge/Java-21-orange)](https://openjdk.java.net/projects/jdk/21/) [![Discord](https://img.shields.io/badge/Discord-Join%20Discord-brightgreen?logo=discord)](https://discord.com/invite/Zgds9u353N)
+[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.4-blue)](https://papermc.io/)
+[![Java 21](https://img.shields.io/badge/Java-21-orange)](https://openjdk.java.net/projects/jdk/21/)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Discord-brightgreen?logo=discord)](https://discord.com/invite/Zgds9u353N)
 
-An **extensible, AI-powered Minecraft toolkit** built on Spigot/Paper — bridging the gap between in-game commands and OpenAI’s powerful models. Whether you need chat intelligence, in-server image generation, or advanced model selection, CoreAI has you covered.
+**CoreAI** is an extensible, AI-powered Minecraft toolkit built on Spigot/Paper – now with in-game **image generation**, **map rendering**, and automatic
+cleanup of unused assets.
 
 ---
 
 ## 🚀 Features
 
-- **Interactive Chat**: `/chat <message>` engages ChatGPT with full conversation history and per-player API keys.
-- **Per-Player API Keys**: Securely store your own OpenAI key via `setapikey` (AES-GCM encrypted on disk)
-- **Model Selection GUI**: `/models` opens a paginated inventory of available models; click to choose your active model.
-- **Model Details**: `/modelinfo` fetches and displays detailed metadata for the current model (engine, owner, permissions, etc.).
-- **Session Management**: Automatic agent creation and cleanup on player join/quit; per-player model overrides persisted across restarts.
-- **Config-Driven**: Customize default API key, model, and timeout in `config.yml` under `openai.*` keys.
+- 💬 **Interactive Chat**  
+  Use `/chat <message>` to talk with ChatGPT using full per-player context.
+
+- 🔐 **Per-Player API Keys**  
+  Players can securely store OpenAI keys with `/setapikey` (AES-GCM encrypted).
+
+- 📦 **Model GUI**  
+  Use `/models` to open a GUI with all available models tied to your key.
+
+- 📄 **Model Info**  
+  Use `/modelinfo` to get full details about your active model.
+
+- 🖼️ **Image-to-Map Rendering**  
+  Use `/imagemap <url>` to convert any image into in-game maps (supports `WxH` tiling).
+
+- 🎨 **AI Image Generation**  
+  Use `/imagegenmap <prompt>` to generate a DALL·E image and get it as Minecraft maps.
+
+- 💾 **Map Persistence & Recovery**  
+  Generated map tiles are stored as `.png` files and restored after server restarts.
+
+- 🧹 **Automatic Cleanup**  
+  Unused images are cleaned up after a configurable number of days.
+  - Manual cleanup with `/cleanup`
+  - Tracks "last seen" map usage (inventory, item frames, ground, etc.)
 
 ---
 
@@ -21,80 +43,100 @@ An **extensible, AI-powered Minecraft toolkit** built on Spigot/Paper — bridgi
 1. [Installation](#installation)
 2. [Configuration](#configuration)
 3. [Usage](#usage)
-   - [Commands](#commands)
 4. [Permissions](#permissions)
-5. [Development & Contribution](#development--contribution)
+5. [Development](#development)
 6. [Roadmap](#roadmap)
 7. [License](#license)
 
 ---
 
 ## 🔧 Installation
+
 1. Drop `CoreAI.jar` into your server’s `plugins/` directory.
-2. Start the server to generate the default `config.yml` and data folder.
-3. (Optional) Operators: set a global API key in `config.yml` or let players manage their own.
+2. Restart the server.
+3. Set an optional global API key in `config.yml` or let players use `/setapikey`.
 
 ---
 
 ## ⚙️ Configuration
-Located at `plugins/CoreAI/config.yml`. Key options:
+
 ```yaml
-enable-feature-x: true           # Toggle advanced features
 openai:
-  api-key: ""                # Default API key (if you don’t use per-player keys)
-  model: "gpt-3.5-turbo"     # Default model
-  timeout-ms: 60000            # Request timeout in milliseconds
-```  
+  api-key: ""                  # Optional: server-wide default key
+  model: "gpt-3.5-turbo"       # Default model to use
+  timeout-ms: 60000            # Max wait time for chat completions
+  timeout-image-ms: 300000     # Max wait time for image generation
+
+cleanup:
+  auto-enabled: true           # Enable automatic cleanup
+  max-age-days: 30             # Delete unused map images older than this
+````
 
 ---
 
 ## 🛠️ Usage
+
 ### Commands
 
-| Command       | Description                                                       | Permission         |
-|---------------|-------------------------------------------------------------------|--------------------|
-| `setapikey`   | Store your personal OpenAI key securely (AES-GCM encrypted).      | `coreai.setapikey` |
-| `/chat <msg>` | Chat with the AI, keeping full context.                           | `coreai.chat`      |
-| `/models`     | Open a paginated GUI to select available models for your key.     | `coreai.models`    |
-| `/modelinfo`  | Display detailed info about your current model (engine metadata). | `coreai.modelinfo` |
+| Command                 | Description                                                     |
+|-------------------------|-----------------------------------------------------------------|
+| `/setapikey`            | Store your OpenAI key (AES-encrypted on disk)                   |
+| `/chat <message>`       | Chat with AI using your configured model and key                |
+| `/models`               | Choose an AI model using a GUI                                  |
+| `/modelinfo`            | View info about your current model                              |
+| `/imagemap <url>`       | Render an image from a URL into map tiles (supports WxH tiling) |
+| `/imagegenmap <prompt>` | Generate an AI image from a prompt and render it as a map grid  |
+| `/cleanup`              | Manually remove old unused image maps                           |
 
-### Permissions
+---
+
+## 🔐 Permissions
+
 ```yaml
 coreai.setapikey:
-  description: Allows storing a personal API key
   default: true
+
 coreai.chat:
-  description: Allows chatting with the AI
   default: true
+
 coreai.models:
-  description: Allows browsing and selecting AI models
   default: true
+
 coreai.modelinfo:
-  description: Allows fetching information about the set AI model
   default: true
+
+coreai.imagemap:
+  default: true
+
+coreai.imagegenmap:
+  default: true
+
+coreai.cleanup:
+  default: op
 ```
 
 ---
 
-## 🛠️ Development & Contribution
-CoreAI is open source! To contribute:
-1. Fork the repository
-2. Clone & open in IntelliJ (Java 21 + Maven)
-3. Implement features, fix bugs, and write tests
-4. Submit a pull request with a clear description
+## 💡 Development
 
-<br/>
+Want to contribute? Fork this repo and open a PR!
 
-## 🔮 Roadmap
-- 🖼️ **In-game Image Generation**: Render AI-generated images onto Minecraft maps.
-- 🌐 **Webhook Integration**: Post chat transcripts to Discord or Webhooks.
-- 📊 **Metrics & Usage**: Track API usage per player & model.
-- 📦 **Plugin Hub**: Provide optional modules (e.g., AI shop, NPC dialogue).
+* Java 21
+* PaperMC 1.21.4+
+* IntelliJ recommended
+
+---
+
+## 🔮 Roadmap ( ? )
+
+* 🤖 NPCs with AI-generated speech and personalities
+* 🎭 Integration with Citizens and Denizen
+* 💬 Support for audio (TTS via browser mod support)
 
 ---
 
 ## 📄 License
+
 MIT © StealingDaPenta 2025
 
-*Join our [Discord](https://discord.gg/your-server) for previews, feedback, and community support!*
-
+> Join our [Discord](https://www.stealingdapenta.be) to give feedback, suggest features, or show off your creations!
