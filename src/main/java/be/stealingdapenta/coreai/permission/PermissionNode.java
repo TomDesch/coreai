@@ -32,7 +32,12 @@ public enum PermissionNode {
     /**
      * Allows using the /imagegenmap command to create a map from an image URL.
      */
-    IMAGE_GEN_MAP("coreai.imagegenmap");
+    IMAGE_GEN_MAP("coreai.imagegenmap"),
+
+    /**
+     * Allows using the /cleanup command to clean up unused images.
+     */
+    IMAGE_CLEANUP("coreai.cleanup");
 
     private final String node;
 

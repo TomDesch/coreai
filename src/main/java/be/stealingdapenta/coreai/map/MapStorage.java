@@ -1,5 +1,7 @@
 package be.stealingdapenta.coreai.map;
 
+import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
+import static be.stealingdapenta.coreai.config.Config.CLEANUP_MAX_DAYS;
 import static be.stealingdapenta.coreai.map.MapImageService.MAP_IMAGE_SERVICE;
 
 import be.stealingdapenta.coreai.CoreAI;
@@ -8,7 +10,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Logger;
 import javax.imageio.ImageIO;
 import org.bukkit.Bukkit;
 import org.bukkit.map.MapView;
@@ -23,7 +24,6 @@ public enum MapStorage {
     MAP_STORAGE;
 
     private static final String DIR_NAME = "maps";
-    private static final Logger log = CoreAI.CORE_AI_LOGGER;
 
     private final Map<Integer, BufferedImage> mapImages = new HashMap<>();
     private final File dir = new File(CoreAI.getInstance()
@@ -51,7 +51,7 @@ public enum MapStorage {
                     mapImages.put(id, img);
                 }
             } catch (Exception e) {
-                log.warning("Failed to load stored map: " + file.getName() + " (" + e.getMessage() + ")");
+                CORE_AI_LOGGER.warning("Failed to load stored map: " + file.getName() + " (" + e.getMessage() + ")");
             }
         }
     }
@@ -70,7 +70,7 @@ public enum MapStorage {
             ImageIO.write(image, "png", out);
             mapImages.put(id, image);
         } catch (IOException e) {
-            log.warning("Failed to store image for map " + id + ": " + e.getMessage());
+            CORE_AI_LOGGER.warning("Failed to store image for map " + id + ": " + e.getMessage());
         }
     }
 
@@ -90,28 +90,37 @@ public enum MapStorage {
         }
     }
 
+    /**
+     * This method cleans up unused map images that have not been seen for a specified number of days. The 'max allowed days' is configurable in the config.yml file. The last seen timestamp is tracked in the LastSeenTracker class. Method also logs
+     * the number of deleted files, or any errors encountered during deletion.
+     */
     public void cleanUpUnusedImages() {
+        int deleted = 0;
+        long now = System.currentTimeMillis();
+        long maxAgeMillis = CLEANUP_MAX_DAYS.get() * 24L * 60 * 60 * 1000; // Convert days to milliseconds
+
         File[] files = dir.listFiles((d, name) -> name.startsWith("map_") && name.endsWith(".png"));
         if (files == null) {
             return;
         }
 
-        int deleted = 0;
-
         for (File file : files) {
             try {
-                String name = file.getName();
-                int id = Integer.parseInt(name.substring(4, name.length() - 4));
-                if (Bukkit.getMap(id) == null) {
+                int id = Integer.parseInt(file.getName()
+                                              .substring(4, file.getName()
+                                                                .length() - 4)); // parse ID from map name
+                long lastSeen = LastSeenTracker.LAST_SEEN_TRACKER.getLastSeen(id);
+                if (now - lastSeen > maxAgeMillis) {
                     if (file.delete()) {
+                        mapImages.remove(id);
                         deleted++;
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                CORE_AI_LOGGER.warning("Error while checking map image for cleanup: " + file.getName() + " (" + e.getMessage() + ")");
             }
         }
 
-        log.info("Cleaned up " + deleted + " orphaned map image file(s).");
+        CORE_AI_LOGGER.info("Cleaned up " + deleted + " orphaned map image file(s).");
     }
-
 }

@@ -1,5 +1,5 @@
 name: CoreAI
-version: '1.1.5'
+version: '1.1.6'
 main: be.stealingdapenta.coreai.CoreAI
 api-version: '1.21'
 load: STARTUP
@@ -33,6 +33,11 @@ commands:
     usage: /<command> <prompt> [<columns>x<rows>]
     permission: coreai.imagegenmap
 
+  cleanup:
+    description: Cleanup old custom image maps based on last seen date
+    usage: /<command>
+    permission: coreai.cleanup
+
 permissions:
   coreai.setapikey:
     description: Allows setting your personal OpenAI API key
@@ -52,3 +57,6 @@ permissions:
   coreai.imagegenmap:
     description: Allows using /imagegenmap to generate a map from a prompt
     default: true
+  coreai.cleanup:
+    description: Allows using /cleanup to remove old custom image maps
+    default: op

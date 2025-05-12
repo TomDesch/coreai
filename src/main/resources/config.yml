@@ -1,6 +1,11 @@
-# config.yml v1.1.3
+# config.yml v1.2.0
 openai:
   api-key: ""           # ← Paste your key here (or leave blank and set via env)
   model: "gpt-3.5-turbo" # default ChatGPT model
   timeout-ms: 60000      # how long to wait for a response: 60 000 = 1 minute
   timeout-image-ms: 300000 # how long to wait for an image response: 300 000 = 5 minutes
+
+cleanup:
+  auto-enabled: true
+  max-age-days: 30
+

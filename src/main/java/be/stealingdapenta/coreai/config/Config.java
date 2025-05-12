@@ -11,5 +11,6 @@ public final class Config {
     public static final ConfigValue<String> MODEL = new ConfigValue<>("openai.model", "gpt-3.5-turbo", FileConfiguration::getString);
     public static final ConfigValue<Integer> TIMEOUT_MS = new ConfigValue<>("openai.timeout-ms", 60_000, FileConfiguration::getInt);
     public static final ConfigValue<Integer> TIMEOUT_IMAGE_MS = new ConfigValue<>("openai.timeout-image-ms", 300_000, FileConfiguration::getInt);
-
+    public static final ConfigValue<Boolean> AUTO_CLEANUP_ENABLED = new ConfigValue<>("cleanup.auto-enabled", true, FileConfiguration::getBoolean);
+    public static final ConfigValue<Integer> CLEANUP_MAX_DAYS = new ConfigValue<>("cleanup.max-age-days", 30, FileConfiguration::getInt);
 }

@@ -1,16 +1,20 @@
 package be.stealingdapenta.coreai;
 
 import static be.stealingdapenta.coreai.config.Config.API_KEY;
+import static be.stealingdapenta.coreai.config.Config.AUTO_CLEANUP_ENABLED;
 import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
+import static be.stealingdapenta.coreai.map.LastSeenTracker.LAST_SEEN_TRACKER;
 import static be.stealingdapenta.coreai.map.MapStorage.MAP_STORAGE;
 
 import be.stealingdapenta.coreai.command.ChatCommand;
+import be.stealingdapenta.coreai.command.ImageCleanupCommand;
 import be.stealingdapenta.coreai.command.ImageGenMapCommand;
 import be.stealingdapenta.coreai.command.ImageMapCommand;
 import be.stealingdapenta.coreai.command.ModelCommand;
 import be.stealingdapenta.coreai.command.ModelInfoCommand;
 import be.stealingdapenta.coreai.gui.ModelSelectorGUI;
 import be.stealingdapenta.coreai.listener.AsyncApiKeyListener;
+import be.stealingdapenta.coreai.listener.MapUsageTrackerListener;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.logging.Logger;
@@ -55,6 +59,8 @@ public class CoreAI extends JavaPlugin {
         // Initialize the SessionManager and MapStorage
         SESSION_MANAGER.initialize();
 
+        LAST_SEEN_TRACKER.load();
+
         MAP_STORAGE.initialize();
         // Schedule renderers to be restored after worlds are ready,
         // The server does not begin ticking until after all plugins are enabled and all worlds are fully loaded.
@@ -62,8 +68,8 @@ public class CoreAI extends JavaPlugin {
               .runTask(this, () -> {
                   try {
                       MAP_STORAGE.restoreAllMapRenderers();
-                      MAP_STORAGE.cleanUpUnusedImages();
-                      CORE_AI_LOGGER.info("Restored all map renderers. Cleaned up all unused images.");
+                      runAutoMapCleaner();
+                      CORE_AI_LOGGER.info("Restored all map renderers.");
                   } catch (Exception e) {
                       CORE_AI_LOGGER.severe("Failed to initialize map storage: " + e.getMessage());
                       CORE_AI_LOGGER.info(Arrays.toString(e.getStackTrace()));
@@ -78,6 +84,8 @@ public class CoreAI extends JavaPlugin {
                    .registerEvents(gui, this);
         getServer().getPluginManager()
                    .registerEvents(SESSION_MANAGER, this);
+        getServer().getPluginManager()
+                   .registerEvents(new MapUsageTrackerListener(), this);
 
         // Register commands with proper executors
         Objects.requireNonNull(getCommand("chat"))
@@ -90,6 +98,8 @@ public class CoreAI extends JavaPlugin {
                .setExecutor(new ImageMapCommand());
         Objects.requireNonNull(getCommand("imagegenmap"))
                .setExecutor(new ImageGenMapCommand());
+        Objects.requireNonNull(getCommand("cleanup"))
+               .setExecutor(new ImageCleanupCommand());
 
         CORE_AI_LOGGER.info(ANSI_GREEN + "CoreAI ready to roll!" + ANSI_RESET);
     }
@@ -101,8 +111,19 @@ public class CoreAI extends JavaPlugin {
         }
     }
 
+    /**
+     * Triggered on launch. If auto cleanup is enabled, schedule a task to clean up unused images after a delay.
+     */
+    private void runAutoMapCleaner() {
+        if (AUTO_CLEANUP_ENABLED.get()) {
+            getServer().getScheduler()
+                       .runTaskLater(this, MAP_STORAGE::cleanUpUnusedImages, 60L); // 3 seconds after startup
+        }
+    }
+
     @Override
     public void onDisable() {
+        LAST_SEEN_TRACKER.save();
         CORE_AI_LOGGER.info(ANSI_RED + "CoreAI disabled." + ANSI_RESET);
     }
 }

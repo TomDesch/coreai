@@ -1,5 +1,6 @@
 package be.stealingdapenta.coreai.map;
 
+import static be.stealingdapenta.coreai.map.LastSeenTracker.LAST_SEEN_TRACKER;
 import static net.kyori.adventure.text.Component.text;
 import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
 
@@ -87,6 +88,7 @@ public enum MapImageService {
         mapView.getRenderers()
                .clear();
         mapView.addRenderer(rendererFrom(tile, mapView));
+        LAST_SEEN_TRACKER.markSeen(mapView.getId());
 
         ItemStack mapItem = new ItemStack(Material.FILLED_MAP);
         MapMeta meta = (MapMeta) mapItem.getItemMeta();
