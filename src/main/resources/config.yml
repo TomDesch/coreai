@@ -1,11 +1,21 @@
-# config.yml v1.2.0
+# CoreAI Configuration — v1.2.0
+
 openai:
-  api-key: ""           # ← Paste your key here (or leave blank and set via env)
-  model: "gpt-3.5-turbo" # default ChatGPT model
-  timeout-ms: 60000      # how long to wait for a response: 60 000 = 1 minute
-  timeout-image-ms: 300000 # how long to wait for an image response: 300 000 = 5 minutes
+  # Server-wide default API key (optional). Leave empty to require players to set their own key.
+  api-key: ""
+
+  # Default model to use for chat requests.
+  model: "gpt-3.5-turbo"
+
+  # Timeout for chat completions (in milliseconds).
+  timeout-ms: 60000  # 60,000 ms = 1 minute
+
+  # Timeout for image generation (in milliseconds).
+  timeout-image-ms: 300000  # 300,000 ms = 5 minutes
 
 cleanup:
+  # Enable automatic cleanup of old custom image maps.
   auto-enabled: true
-  max-age-days: 30
 
+  # Maximum age (in days) before a map image is considered unused and deleted.
+  max-age-days: 30
