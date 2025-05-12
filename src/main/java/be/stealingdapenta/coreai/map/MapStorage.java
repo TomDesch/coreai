@@ -81,7 +81,7 @@ public enum MapStorage {
         for (Map.Entry<Integer, BufferedImage> entry : mapImages.entrySet()) {
             int id = entry.getKey();
             BufferedImage image = entry.getValue();
-            MapView view = Bukkit.getMap(id); // fixme here
+            MapView view = Bukkit.getMap(id);
             if (view != null) {
                 view.getRenderers()
                     .clear();
@@ -89,4 +89,29 @@ public enum MapStorage {
             }
         }
     }
+
+    public void cleanUpUnusedImages() {
+        File[] files = dir.listFiles((d, name) -> name.startsWith("map_") && name.endsWith(".png"));
+        if (files == null) {
+            return;
+        }
+
+        int deleted = 0;
+
+        for (File file : files) {
+            try {
+                String name = file.getName();
+                int id = Integer.parseInt(name.substring(4, name.length() - 4));
+                if (Bukkit.getMap(id) == null) {
+                    if (file.delete()) {
+                        deleted++;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        log.info("Cleaned up " + deleted + " orphaned map image file(s).");
+    }
+
 }

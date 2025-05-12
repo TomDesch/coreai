@@ -58,7 +58,8 @@ public class CoreAI extends JavaPlugin {
               .runTask(this, () -> {
                   try {
                       MAP_STORAGE.restoreAllMapRenderers();
-                      CORE_AI_LOGGER.info("Restored all map renderers.");
+                      MAP_STORAGE.cleanUpUnusedImages();
+                      CORE_AI_LOGGER.info("Restored all map renderers. Cleaned up all unused images.");
                   } catch (Exception e) {
                       CORE_AI_LOGGER.severe("Failed to initialize map storage: " + e.getMessage());
                       CORE_AI_LOGGER.info(Arrays.toString(e.getStackTrace()));
