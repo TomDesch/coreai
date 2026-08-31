@@ -1,8 +1,6 @@
 package be.stealingdapenta.coreai.map;
 
 import static be.stealingdapenta.coreai.map.LastSeenTracker.LAST_SEEN_TRACKER;
-import static net.kyori.adventure.text.Component.text;
-import static net.kyori.adventure.text.format.NamedTextColor.GRAY;
 
 import java.awt.Graphics2D;
 import java.awt.Image;
@@ -92,8 +90,11 @@ public enum MapImageService {
 
         ItemStack mapItem = new ItemStack(Material.FILLED_MAP);
         MapMeta meta = (MapMeta) mapItem.getItemMeta();
+        if (meta == null) {
+            return mapItem;
+        }
         meta.setMapView(mapView);
-        meta.displayName(text("Map col: " + (col + 1) + ", row: " + (row + 1), GRAY));
+        meta.setDisplayName("Map col: " + (col + 1) + ", row: " + (row + 1));
         mapItem.setItemMeta(meta);
         return mapItem;
     }

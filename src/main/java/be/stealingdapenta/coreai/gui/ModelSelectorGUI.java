@@ -2,16 +2,12 @@ package be.stealingdapenta.coreai.gui;
 
 import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 import static be.stealingdapenta.coreai.util.ChatMessages.modelStored;
-import static net.kyori.adventure.text.format.NamedTextColor.AQUA;
-import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -30,11 +26,10 @@ import org.jetbrains.annotations.NotNull;
 public class ModelSelectorGUI implements Listener {
 
     private static final String INVENTORY_TITLE = "          Select AI Model";
-    private static final Component TITLE_COMPONENT = Component.text(INVENTORY_TITLE, AQUA);
     private static final int SLOTS_PER_ROW = 9;
     private static final int MAX_SLOTS = 54;
-    private static final Component NEXT_LABEL = Component.text("Next Page", AQUA);
-    private static final Component PREV_LABEL = Component.text("Previous Page", AQUA);
+    private static final String NEXT_LABEL = "Next Page";
+    private static final String PREV_LABEL = "Previous Page";
 
     private final Map<UUID, List<String>> playerModels = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> playerPage = new ConcurrentHashMap<>();
@@ -70,14 +65,14 @@ public class ModelSelectorGUI implements Listener {
         int rows = Math.min(rowsNeeded, maxRows);
         int size = rows * SLOTS_PER_ROW;
 
-        Inventory inv = Bukkit.createInventory(null, size, TITLE_COMPONENT);
+        Inventory inv = Bukkit.createInventory(null, size, INVENTORY_TITLE);
 
         // Populate model items
         for (int i = 0; i < displayCount; i++) {
             String modelId = sortedModels.get(startIndex + i);
             ItemStack item = new ItemStack(Material.PAPER);
             ItemMeta meta = item.getItemMeta();
-            meta.displayName(Component.text(modelId, GREEN));
+            meta.setDisplayName(modelId);
             item.setItemMeta(meta);
             inv.setItem(i, item);
         }
@@ -86,14 +81,14 @@ public class ModelSelectorGUI implements Listener {
         if (currentPage < totalPages - 1) {
             ItemStack next = new ItemStack(Material.ARROW);
             ItemMeta m = next.getItemMeta();
-            m.displayName(NEXT_LABEL);
+            m.setDisplayName(NEXT_LABEL);
             next.setItemMeta(m);
             inv.setItem(size - 1, next);
         }
         if (currentPage > 0) {
             ItemStack prev = new ItemStack(Material.ARROW);
             ItemMeta m = prev.getItemMeta();
-            m.displayName(PREV_LABEL);
+            m.setDisplayName(PREV_LABEL);
             prev.setItemMeta(m);
             inv.setItem(size - SLOTS_PER_ROW, prev);
         }
@@ -107,8 +102,8 @@ public class ModelSelectorGUI implements Listener {
             return;
         }
         InventoryView view = event.getView();
-        if (!view.title()
-                 .equals(TITLE_COMPONENT)) {
+        if (!view.getTitle()
+                 .equals(INVENTORY_TITLE)) {
             return;
         }
         event.setCancelled(true);
@@ -117,23 +112,21 @@ public class ModelSelectorGUI implements Listener {
         if (clicked == null || !clicked.hasItemMeta()) {
             return;
         }
-        Component nameComp = clicked.getItemMeta()
-                                    .displayName();
-        if (nameComp == null) {
+        ItemMeta clickedMeta = clicked.getItemMeta();
+        if (clickedMeta == null || !clickedMeta.hasDisplayName()) {
             return;
         }
-        String chosenModel = PlainTextComponentSerializer.plainText()
-                                                         .serialize(nameComp);
+        String chosenModel = clickedMeta.getDisplayName();
 
         UUID uuid = player.getUniqueId();
         List<String> models = playerModels.get(uuid);
         int page = playerPage.getOrDefault(uuid, 0);
 
-        if (NEXT_LABEL.equals(nameComp)) {
+        if (NEXT_LABEL.equals(chosenModel)) {
             openModelGui(player, models, page + 1);
             return;
         }
-        if (PREV_LABEL.equals(nameComp)) {
+        if (PREV_LABEL.equals(chosenModel)) {
             openModelGui(player, models, page - 1);
             return;
         }
@@ -142,6 +135,6 @@ public class ModelSelectorGUI implements Listener {
         SESSION_MANAGER.setPlayerModel(uuid, chosenModel);
 
         player.closeInventory();
-        player.sendMessage(modelStored(chosenModel));
+        be.stealingdapenta.coreai.util.ChatMessages.send(player, modelStored(chosenModel));
     }
 }

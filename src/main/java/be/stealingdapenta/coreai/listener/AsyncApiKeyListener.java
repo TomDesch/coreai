@@ -5,14 +5,15 @@ import static be.stealingdapenta.coreai.util.ChatMessages.API_KEY_ENTRY_CANCELLE
 import static be.stealingdapenta.coreai.util.ChatMessages.API_KEY_ENTRY_PROMPT;
 import static be.stealingdapenta.coreai.util.ChatMessages.API_KEY_STORED;
 
-import io.papermc.paper.event.player.AsyncChatEvent;
+import static be.stealingdapenta.coreai.util.ChatMessages.send;
+
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerChatEvent;
 
 public class AsyncApiKeyListener implements Listener {
 
@@ -23,12 +24,11 @@ public class AsyncApiKeyListener implements Listener {
      * Intercepts setapikey typed in chat and starts key input session.
      */
     @EventHandler
-    public void onChat(AsyncChatEvent event) {
+    public void onChat(PlayerChatEvent event) {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
-        String msg = PlainTextComponentSerializer.plainText()
-                                                 .serialize(event.message())
-                                                 .trim();
+        String msg = event.getMessage()
+                          .trim();
 
         if (awaitingKeyInput.contains(uuid)) {
             // They are typing their API key
@@ -37,12 +37,12 @@ public class AsyncApiKeyListener implements Listener {
 
             String apiKey = msg.trim();
             if (apiKey.isEmpty()) { // can theoretically never happen
-                player.sendMessage(API_KEY_ENTRY_CANCELLED);
+                send(player, API_KEY_ENTRY_CANCELLED);
                 return;
             }
 
             SESSION_MANAGER.setPlayerAPIKey(uuid, apiKey);
-            player.sendMessage(API_KEY_STORED);
+            send(player, API_KEY_STORED);
             return;
         }
 
@@ -50,7 +50,7 @@ public class AsyncApiKeyListener implements Listener {
             // Player initiates key setting
             event.setCancelled(true);
             awaitingKeyInput.add(uuid);
-            player.sendMessage(API_KEY_ENTRY_PROMPT);
+            send(player, API_KEY_ENTRY_PROMPT);
         }
     }
 }

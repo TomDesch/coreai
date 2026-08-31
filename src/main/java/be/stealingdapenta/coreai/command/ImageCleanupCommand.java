@@ -16,14 +16,14 @@ public class ImageCleanupCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (!sender.hasPermission(IMAGE_CLEANUP.node())) {
-            sender.sendMessage(NO_PERMISSION);
+            be.stealingdapenta.coreai.util.ChatMessages.send(sender, NO_PERMISSION);
             return true;
         }
 
         sender.sendMessage("[CoreAI] Cleaning up unused images...");
 
         MAP_STORAGE.cleanUpUnusedImages();
-        sender.sendMessage(text("[CoreAI] Finished cleaning up unused images. Check the logs for any potential issues.", GREEN));
+        sender.sendMessage("[CoreAI] Finished cleaning up unused images. Check the logs for any potential issues.");
         return true;
     }
 }

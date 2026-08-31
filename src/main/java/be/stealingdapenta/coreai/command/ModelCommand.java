@@ -36,22 +36,22 @@ public class ModelCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(PLAYERS_ONLY);
+            ChatMessages.send(sender, PLAYERS_ONLY);
             return true;
         }
         if (!player.hasPermission(PermissionNode.MODELS.node())) {
-            player.sendMessage(NO_PERMISSION);
+            ChatMessages.send(player, NO_PERMISSION);
             return true;
         }
 
         UUID uuid = player.getUniqueId();
-        player.sendMessage(FETCHING_MODELS);
+        ChatMessages.send(player, FETCHING_MODELS);
 
         // Get the player's agent (includes key and stored model)
         ChatAgent agent = SessionManager.SESSION_MANAGER.getAgent(uuid);
         String key = agent.getApiKey();
         if (key == null || key.isBlank()) {
-            player.sendMessage(INVALID_API_KEY_WITH_INSTRUCTIONS);
+            ChatMessages.send(player, INVALID_API_KEY_WITH_INSTRUCTIONS);
             return true;
         }
 
@@ -65,15 +65,15 @@ public class ModelCommand implements CommandExecutor {
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
                                 if ("invalid_api_key" .equals(oae.getCode())) {
-                                    player.sendMessage(INVALID_API_KEY_WITH_INSTRUCTIONS);
+                                    ChatMessages.send(player, INVALID_API_KEY_WITH_INSTRUCTIONS);
                                 } else {
-                                    player.sendMessage(ChatMessages.openAiError(oae));
+                                    ChatMessages.send(player, ChatMessages.openAiError(oae));
                                 }
                             });
                       return;
                   } catch (IOException ioe) {
                       Bukkit.getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(ChatMessages.ioError(ioe)));
+                            .runTask(CoreAI.getInstance(), () -> ChatMessages.send(player, ChatMessages.ioError(ioe)));
                       return;
                   }
 
@@ -83,7 +83,7 @@ public class ModelCommand implements CommandExecutor {
                       models = agent.listModels();
                   } catch (OpenAiException oae) {
                       Bukkit.getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(ChatMessages.openAiError(oae)));
+                            .runTask(CoreAI.getInstance(), () -> ChatMessages.send(player, ChatMessages.openAiError(oae)));
                       return;
                   }
 

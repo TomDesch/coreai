@@ -13,6 +13,7 @@ import static be.stealingdapenta.coreai.util.ChatMessages.imageMapGeneratedFromA
 import static be.stealingdapenta.coreai.util.ChatMessages.usageImageMapCommand;
 
 import be.stealingdapenta.coreai.CoreAI;
+import be.stealingdapenta.coreai.util.ChatMessages;
 import be.stealingdapenta.coreai.manager.SessionManager;
 import be.stealingdapenta.coreai.service.ChatAgent;
 import be.stealingdapenta.coreai.service.OpenAIApi;
@@ -31,17 +32,17 @@ public class ImageGenMapCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(PLAYERS_ONLY);
+            ChatMessages.send(sender, PLAYERS_ONLY);
             return true;
         }
 
         if (!player.hasPermission(IMAGE_MAP.node())) {
-            player.sendMessage(NO_PERMISSION);
+            ChatMessages.send(player, NO_PERMISSION);
             return true;
         }
 
         if (args.length < 1) {
-            player.sendMessage(usageImageMapCommand(label, "<prompt>"));
+            ChatMessages.send(player, usageImageMapCommand(label, "<prompt>"));
             return true;
         }
 
@@ -49,7 +50,7 @@ public class ImageGenMapCommand implements CommandExecutor {
         ChatAgent agent = SessionManager.SESSION_MANAGER.getAgent(player.getUniqueId());
         String key = agent.getApiKey();
         if (key == null || key.isBlank()) {
-            player.sendMessage(INVALID_API_KEY_WITH_INSTRUCTIONS);
+            ChatMessages.send(player, INVALID_API_KEY_WITH_INSTRUCTIONS);
             return true;
         }
 
@@ -63,7 +64,7 @@ public class ImageGenMapCommand implements CommandExecutor {
                 width = Integer.parseInt(dims[0]);
                 height = Integer.parseInt(dims[1]);
             } catch (NumberFormatException e) {
-                player.sendMessage(INVALID_DIMENSIONS);
+                ChatMessages.send(player, INVALID_DIMENSIONS);
                 return true;
             }
             prompt = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
@@ -75,7 +76,7 @@ public class ImageGenMapCommand implements CommandExecutor {
         final int finalHeight = height;
         final int amount = finalWidth * finalHeight;
 
-        player.sendMessage(GENERATING_AI_IMAGE);
+        ChatMessages.send(player, GENERATING_AI_IMAGE);
 
         Bukkit.getScheduler()
               .runTaskAsynchronously(CoreAI.getInstance(), () -> {
@@ -92,13 +93,13 @@ public class ImageGenMapCommand implements CommandExecutor {
                                 long endTime = System.currentTimeMillis();
                                 long duration = endTime - startTime;
                                 MAP_IMAGE_SERVICE.addMapToInventory(player, finalWidth, finalHeight, tiles);
-                                player.sendMessage(imageMapGeneratedFromAI(amount, duration));
+                                ChatMessages.send(player, imageMapGeneratedFromAI(amount, duration));
                             });
 
                   } catch (Exception e) {
                       CORE_AI_LOGGER.warning("Failed to generate AI image: " + e.getMessage());
                       CORE_AI_LOGGER.warning(Arrays.toString(e.getStackTrace()));
-                      player.sendMessage(IMAGE_GENERATION_ERROR);
+                      ChatMessages.send(player, IMAGE_GENERATION_ERROR);
                   }
               });
 

@@ -11,6 +11,8 @@ import static net.kyori.adventure.text.format.NamedTextColor.RED;
 import be.stealingdapenta.coreai.service.OpenAiException;
 import java.io.IOException;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 public final class ChatMessages {
@@ -88,6 +90,15 @@ public final class ChatMessages {
 
     private ChatMessages() {
         // Utility class
+    }
+
+    public static String plain(Component component) {
+        return PlainTextComponentSerializer.plainText()
+                                          .serialize(component);
+    }
+
+    public static void send(CommandSender sender, Component component) {
+        sender.sendMessage(plain(component));
     }
 
     /**

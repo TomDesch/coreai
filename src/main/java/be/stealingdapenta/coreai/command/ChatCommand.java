@@ -27,11 +27,11 @@ public class ChatCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(PLAYERS_ONLY);
+            ChatMessages.send(sender, PLAYERS_ONLY);
             return true;
         }
         if (!player.hasPermission(PermissionNode.CHAT.node())) {
-            player.sendMessage(NO_PERMISSION);
+            ChatMessages.send(player, NO_PERMISSION);
             return true;
         }
         if (args.length == 0) {
@@ -39,8 +39,8 @@ public class ChatCommand implements CommandExecutor {
         }
 
         String prompt = String.join(" ", args);
-        player.sendMessage(chatPrompt(player, prompt));
-        player.sendMessage(MODEL_IS_THINKING);
+        ChatMessages.send(player, chatPrompt(player, prompt));
+        ChatMessages.send(player, MODEL_IS_THINKING);
         UUID uuid = player.getUniqueId();
 
         // Run the chat in an async task
@@ -55,17 +55,17 @@ public class ChatCommand implements CommandExecutor {
                       CoreAI.getInstance()
                             .getServer()
                             .getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(chatResponse(response)));
+                            .runTask(CoreAI.getInstance(), () -> ChatMessages.send(player, chatResponse(response)));
                   } catch (OpenAiException oae) {
                       CoreAI.getInstance()
                             .getServer()
                             .getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
                                 switch (oae.getCode()) {
-                                    case "invalid_api_key" -> player.sendMessage(INVALID_API_KEY_WITH_INSTRUCTIONS);
-                                    case "model_not_found" -> player.sendMessage(MODEL_NOT_FOUND);
+                                    case "invalid_api_key" -> ChatMessages.send(player, INVALID_API_KEY_WITH_INSTRUCTIONS);
+                                    case "model_not_found" -> ChatMessages.send(player, MODEL_NOT_FOUND);
 
-                                    default -> player.sendMessage(ChatMessages.openAiError(oae));
+                                    default -> ChatMessages.send(player, ChatMessages.openAiError(oae));
                                 }
                             });
                   } catch (IOException ioe) {
@@ -73,7 +73,7 @@ public class ChatCommand implements CommandExecutor {
                       CoreAI.getInstance()
                             .getServer()
                             .getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> player.sendMessage(ChatMessages.ioError(ioe)));
+                            .runTask(CoreAI.getInstance(), () -> ChatMessages.send(player, ChatMessages.ioError(ioe)));
                   }
               });
 

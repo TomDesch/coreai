@@ -4,6 +4,8 @@ import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
 import static be.stealingdapenta.coreai.map.MapImageService.MAP_IMAGE_SERVICE;
 import static be.stealingdapenta.coreai.permission.PermissionNode.IMAGE_MAP;
 import static be.stealingdapenta.coreai.util.ChatMessages.DOWNLOADING_IMAGE;
+
+import be.stealingdapenta.coreai.util.ChatMessages;
 import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_DIMENSIONS;
 import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_SIZE_NUMBER;
 import static be.stealingdapenta.coreai.util.ChatMessages.NO_PERMISSION;
@@ -25,41 +27,39 @@ import org.jetbrains.annotations.NotNull;
 
 public class ImageMapCommand implements CommandExecutor {
 
-    @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String @NotNull [] args) {
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage(PLAYERS_ONLY);
-            return true;
-        }
+    static final class ParsedImageRequest {
+        final String url;
+        final int width;
+        final int height;
 
-        if (!player.hasPermission(IMAGE_MAP.node())) {
-            player.sendMessage(NO_PERMISSION);
-            return true;
+        ParsedImageRequest(String url, int width, int height) {
+            this.url = url;
+            this.width = width;
+            this.height = height;
         }
+    }
 
+    static ParsedImageRequest parseRequest(String[] args) {
         if (args.length < 1 || args.length > 2) {
-            player.sendMessage(usageImageMapCommand(label, "<image-url>"));
-            return true;
+            return null;
         }
 
+        String url;
         int width = 1;
         int height = 1;
-        String url;
 
         if (args.length == 2) {
             String[] dims = args[0].toLowerCase()
                                    .split("x");
             if (dims.length != 2) {
-                player.sendMessage(INVALID_DIMENSIONS);
-                return true;
+               return null;
             }
 
             try {
-                width = Integer.parseInt(dims[0]);
-                height = Integer.parseInt(dims[1]);
+               width = Integer.parseInt(dims[0]);
+               height = Integer.parseInt(dims[1]);
             } catch (NumberFormatException e) {
-                player.sendMessage(INVALID_SIZE_NUMBER);
-                return true;
+               return null;
             }
 
             url = args[1];
@@ -67,10 +67,42 @@ public class ImageMapCommand implements CommandExecutor {
             url = args[0];
         }
 
-        player.sendMessage(DOWNLOADING_IMAGE);
+        return new ParsedImageRequest(url, width, height);
+    }
 
-        final int finalWidth = width;
-        final int finalHeight = height;
+    @Override
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, @NotNull String @NotNull [] args) {
+        if (!(sender instanceof Player player)) {
+            ChatMessages.send(sender, PLAYERS_ONLY);
+            return true;
+        }
+
+        if (!player.hasPermission(IMAGE_MAP.node())) {
+            ChatMessages.send(player, NO_PERMISSION);
+            return true;
+        }
+
+        if (args.length < 1 || args.length > 2) {
+            ChatMessages.send(player, usageImageMapCommand(label, "<image-url>"));
+            return true;
+        }
+
+        ParsedImageRequest request = parseRequest(args);
+        if (request == null) {
+            if (args.length == 2 && args[0].toLowerCase()
+                                        .contains("x")) {
+               ChatMessages.send(player, INVALID_DIMENSIONS);
+            } else {
+               ChatMessages.send(player, INVALID_SIZE_NUMBER);
+            }
+            return true;
+        }
+
+        ChatMessages.send(player, DOWNLOADING_IMAGE);
+
+        final int finalWidth = request.width;
+        final int finalHeight = request.height;
+        final String url = request.url;
 
         Bukkit.getScheduler()
               .runTaskAsynchronously(CoreAI.getInstance(), () -> {
@@ -88,12 +120,12 @@ public class ImageMapCommand implements CommandExecutor {
                             .runTask(CoreAI.getInstance(), () -> {
                                 MAP_IMAGE_SERVICE.addMapToInventory(player, finalWidth, finalHeight, tiles);
 
-                                player.sendMessage(imageMapCreated((finalWidth * finalHeight)));
+                                ChatMessages.send(player, imageMapCreated((finalWidth * finalHeight)));
                             });
                   } catch (Exception e) {
                       CORE_AI_LOGGER.warning("Failed to process image map: " + e.getMessage());
                       CORE_AI_LOGGER.warning(Arrays.toString(e.getStackTrace()));
-                      player.sendMessage(mapCreationFailure(e.getMessage()));
+                      ChatMessages.send(player, mapCreationFailure(e.getMessage()));
                   }
               });
 

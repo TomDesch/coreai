@@ -12,6 +12,7 @@ import static be.stealingdapenta.coreai.util.ChatMessages.openAiError;
 import static net.kyori.adventure.text.format.NamedTextColor.AQUA;
 
 import be.stealingdapenta.coreai.CoreAI;
+import be.stealingdapenta.coreai.util.ChatMessages;
 import be.stealingdapenta.coreai.permission.PermissionNode;
 import be.stealingdapenta.coreai.service.ChatAgent;
 import be.stealingdapenta.coreai.service.OpenAiException;
@@ -34,11 +35,11 @@ public class ModelInfoCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String @NotNull [] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(PLAYERS_ONLY);
+            ChatMessages.send(sender, PLAYERS_ONLY);
             return true;
         }
         if (!player.hasPermission(PermissionNode.MODELS.node())) {
-            player.sendMessage(NO_PERMISSION);
+            ChatMessages.send(player, NO_PERMISSION);
             return true;
         }
 
@@ -48,11 +49,11 @@ public class ModelInfoCommand implements CommandExecutor {
         String modelId = agent.getModel();
 
         if (apiKey == null || apiKey.isBlank()) {
-            player.sendMessage(INVALID_API_KEY_WITH_INSTRUCTIONS);
+            ChatMessages.send(player, INVALID_API_KEY_WITH_INSTRUCTIONS);
             return true;
         }
 
-        player.sendMessage(fetchingModelInfo(modelId));
+        ChatMessages.send(player, fetchingModelInfo(modelId));
 
         // Async fetch model info
         Bukkit.getScheduler()
@@ -62,20 +63,20 @@ public class ModelInfoCommand implements CommandExecutor {
                       // On success, display all fields
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
-                                player.sendMessage(modelInfo(modelId));
+                                ChatMessages.send(player, modelInfo(modelId));
                                 info.forEach((key, value) -> {
-                                    player.sendMessage(Component.text(key + ": " + value, AQUA));
+                                    ChatMessages.send(player, Component.text(key + ": " + value, AQUA));
                                 });
                             });
                   } catch (OpenAiException oae) {
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
-                                player.sendMessage(openAiError(oae));
+                                ChatMessages.send(player, openAiError(oae));
                             });
                   } catch (IOException ioe) {
                       Bukkit.getScheduler()
                             .runTask(CoreAI.getInstance(), () -> {
-                                player.sendMessage(ioError(ioe));
+                                ChatMessages.send(player, ioError(ioe));
                             });
                   }
               });
