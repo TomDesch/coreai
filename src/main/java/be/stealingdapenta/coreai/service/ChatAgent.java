@@ -15,9 +15,10 @@ import java.util.Map;
 public class ChatAgent {
 
     private final Deque<Map<String, Object>> history = new ArrayDeque<>();
-    private String apiKey;
-    private String model;
+    private volatile String apiKey;
+    private volatile String model;
     private final int timeoutMs;
+    private final Object historyLock = new Object();
 
     public ChatAgent(String apiKey, String model, int timeoutMs) {
         this.apiKey = apiKey;
@@ -74,19 +75,39 @@ public class ChatAgent {
      * @throws IOException if network or parsing errors occur
      */
     public String chat(String prompt) throws IOException {
-        history.addLast(Map.of("role", "user", "content", prompt));
-        List<Map<String, Object>> contextHistory = List.copyOf(history);
-        String reply = OPEN_AI_API.chat(apiKey, model, timeoutMs, contextHistory);
-        history.addLast(Map.of("role", "assistant", "content", reply));
-        if (history.size() > 20) {
-            history.removeFirst();
-            history.removeFirst();
+        synchronized (historyLock) {
+            history.addLast(Map.of("role", "user", "content", prompt));
+            List<Map<String, Object>> contextHistory = List.copyOf(history);
+            String reply;
+            try {
+                reply = OPEN_AI_API.chat(apiKey, model, timeoutMs, contextHistory);
+            } catch (IOException e) {
+                history.removeLast();
+                throw e;
+            }
+            history.addLast(Map.of("role", "assistant", "content", reply));
+            while (history.size() > 20) {
+                history.removeFirst();
+                history.removeFirst();
+            }
+            return reply;
         }
-        return reply;
     }
 
     @Override
     public String toString() {
-        return "ChatAgent{history=" + history + ", apiKey='" + apiKey + '\'' + ", model='" + model + '\'' + ", timeoutMs=" + timeoutMs + '}';
+        synchronized (historyLock) {
+            return "ChatAgent{historyEntries=" + history.size() + ", apiKey=" + redact(apiKey) + ", model='" + model + '\'' + ", timeoutMs=" + timeoutMs + '}';
+        }
+    }
+
+    private static String redact(String value) {
+        if (value == null || value.isBlank()) {
+            return "<unset>";
+        }
+        if (value.length() <= 4) {
+            return "****";
+        }
+        return value.substring(0, 4) + "...";
     }
 }
