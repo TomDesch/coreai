@@ -1,6 +1,7 @@
 package be.stealingdapenta.coreai.map;
 
 import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
+import static be.stealingdapenta.coreai.map.LastSeenTracker.LAST_SEEN_TRACKER;
 import static be.stealingdapenta.coreai.config.Config.CLEANUP_MAX_DAYS;
 import static be.stealingdapenta.coreai.map.MapImageService.MAP_IMAGE_SERVICE;
 
@@ -26,17 +27,28 @@ public enum MapStorage {
     private static final String DIR_NAME = "maps";
 
     private final Map<Integer, BufferedImage> mapImages = new HashMap<>();
-    private final File dir = new File(CoreAI.getInstance()
-                                            .getDataFolder(), DIR_NAME);
+    private File dir;
+
+    private File getMapDirectory() {
+        if (dir == null) {
+            if (CoreAI.getInstance() != null) {
+                dir = new File(CoreAI.getInstance().getDataFolder(), DIR_NAME);
+            } else {
+                dir = new File(DIR_NAME);
+            }
+        }
+        return dir;
+    }
 
     /**
      * Loads previously saved map images on startup.
      */
     public void initialize() {
-        if (!dir.exists()) {
+        File mapDir = getMapDirectory();
+        if (!mapDir.exists()) {
             return;
         }
-        File[] files = dir.listFiles((d, name) -> name.startsWith("map_") && name.endsWith(".png"));
+        File[] files = mapDir.listFiles((d, name) -> name.startsWith("map_") && name.endsWith(".png"));
         if (files == null) {
             return;
         }
@@ -49,6 +61,7 @@ public enum MapStorage {
                 BufferedImage img = ImageIO.read(file);
                 if (img != null) {
                     mapImages.put(id, img);
+                    LAST_SEEN_TRACKER.markSeen(id);
                 }
             } catch (Exception e) {
                 CORE_AI_LOGGER.warning("Failed to load stored map: " + file.getName() + " (" + e.getMessage() + ")");
@@ -64,11 +77,13 @@ public enum MapStorage {
      */
     public void saveNewMap(MapView view, BufferedImage image) {
         int id = view.getId();
-        File out = new File(dir, "map_" + id + ".png");
+        File mapDir = getMapDirectory();
+        File out = new File(mapDir, "map_" + id + ".png");
         try {
-            dir.mkdirs();
+            mapDir.mkdirs();
             ImageIO.write(image, "png", out);
             mapImages.put(id, image);
+            LAST_SEEN_TRACKER.markSeen(id);
         } catch (IOException e) {
             CORE_AI_LOGGER.warning("Failed to store image for map " + id + ": " + e.getMessage());
         }
@@ -97,9 +112,10 @@ public enum MapStorage {
     public void cleanUpUnusedImages() {
         int deleted = 0;
         long now = System.currentTimeMillis();
-        long maxAgeMillis = CLEANUP_MAX_DAYS.get() * 24L * 60 * 60 * 1000; // Convert days to milliseconds
+        long maxAgeMillis = CLEANUP_MAX_DAYS.get() * 24L * 60 * 60 * 1000L;
 
-        File[] files = dir.listFiles((d, name) -> name.startsWith("map_") && name.endsWith(".png"));
+        File mapDir = getMapDirectory();
+        File[] files = mapDir.listFiles((d, name) -> name.startsWith("map_") && name.endsWith(".png"));
         if (files == null) {
             return;
         }
@@ -108,11 +124,22 @@ public enum MapStorage {
             try {
                 int id = Integer.parseInt(file.getName()
                                               .substring(4, file.getName()
-                                                                .length() - 4)); // parse ID from map name
-                long lastSeen = LastSeenTracker.LAST_SEEN_TRACKER.getLastSeen(id);
-                if (now - lastSeen > maxAgeMillis) {
+                                                                .length() - 4));
+
+                if (mapImages.containsKey(id)) {
+                    LAST_SEEN_TRACKER.markSeen(id);
+                    continue;
+                }
+
+                long lastSeen = LAST_SEEN_TRACKER.getLastSeen(id);
+                if (lastSeen == 0L) {
+                    continue;
+                }
+
+                if (LAST_SEEN_TRACKER.isStale(lastSeen, now, maxAgeMillis)) {
                     if (file.delete()) {
                         mapImages.remove(id);
+                        LAST_SEEN_TRACKER.forget(id);
                         deleted++;
                     }
                 }

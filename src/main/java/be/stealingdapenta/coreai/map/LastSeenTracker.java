@@ -17,19 +17,30 @@ public enum LastSeenTracker {
     private static final String FILE_NAME = "map_seen.yml";
     private static final String KEY = "seen";
 
-    private final File file = new File(CoreAI.getInstance()
-                                             .getDataFolder(), FILE_NAME);
+    private File file;
     private final Map<Integer, Long> lastSeen = new HashMap<>();
+
+    private File getDataFile() {
+        if (file == null) {
+            if (CoreAI.getInstance() != null) {
+                file = new File(CoreAI.getInstance().getDataFolder(), FILE_NAME);
+            } else {
+                file = new File(FILE_NAME);
+            }
+        }
+        return file;
+    }
 
     /**
      * Loads the last seen timestamps from disk.
      */
     public void load() {
-        if (!file.exists()) {
+        File trackerFile = getDataFile();
+        if (!trackerFile.exists()) {
             return;
         }
 
-        FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+        FileConfiguration config = YamlConfiguration.loadConfiguration(trackerFile);
         lastSeen.clear();
 
         if (config.contains(KEY)) {
@@ -53,11 +64,25 @@ public enum LastSeenTracker {
     }
 
     /**
+     * Determines whether a map record should be considered stale for cleanup purposes.
+     */
+    public static boolean isStale(long lastSeen, long now, long maxAgeMillis) {
+        return lastSeen > 0L && now - lastSeen > maxAgeMillis;
+    }
+
+    /**
      * @param mapId The map ID
      * @return Millisecond timestamp of last seen, or 0 if never seen.
      */
     public long getLastSeen(int mapId) {
         return lastSeen.getOrDefault(mapId, 0L);
+    }
+
+    /**
+     * Removes a map from the tracking cache once it is deleted or no longer relevant.
+     */
+    public void forget(int mapId) {
+        lastSeen.remove(mapId);
     }
 
     /**
@@ -70,7 +95,11 @@ public enum LastSeenTracker {
         }
 
         try {
-            config.save(file);
+            File trackerFile = getDataFile();
+            if (trackerFile.getParentFile() != null && !trackerFile.getParentFile().exists()) {
+                trackerFile.getParentFile().mkdirs();
+            }
+            config.save(trackerFile);
         } catch (IOException e) {
             CORE_AI_LOGGER.warning("Failed to save last seen data: " + e.getMessage());
         }

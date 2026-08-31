@@ -7,7 +7,9 @@ import com.squareup.moshi.Moshi;
 import com.squareup.moshi.Types;
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -65,18 +67,13 @@ public enum OpenAIApi {
                                            .build();
         try (Response resp = client.newCall(req)
                                    .execute()) {
+            String json = resp.body() != null ? resp.body().string() : "";
             if (!resp.isSuccessful()) {
-                throw new IOException(HTTP + resp.code());
+                throw parseOpenAiError(resp.code(), json);
             }
-            assert resp.body() != null;
-            String json = resp.body()
-                              .string();
-
             List<Map<String, Object>> data = extractListFromJsonField(json, DATA);
-
             return data.stream()
-                       .map(m -> m.get(ID)
-                                  .toString())
+                       .map(m -> String.valueOf(m.get(ID)))
                        .toList();
         }
     }
@@ -91,11 +88,69 @@ public enum OpenAIApi {
      */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> extractListFromJsonField(String json, String fieldName) throws IOException {
-        Map<String, Object> root = mapAdapter.fromJson(json);
+        Map<String, Object> root = readJsonObject(json);
         if (root == null) {
             throw new IOException("Failed to parse JSON: root is null.");
         }
-        return (List<Map<String, Object>>) root.get(fieldName);
+        Object fieldValue = root.get(fieldName);
+        if (!(fieldValue instanceof List<?> list)) {
+            throw new IOException("Expected top-level field '" + fieldName + "' to contain a list.");
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object entry : list) {
+            if (!(entry instanceof Map<?, ?> mapEntry)) {
+                throw new IOException("Expected top-level field '" + fieldName + "' to contain only object entries.");
+            }
+            result.add(normalizeStringKeys(mapEntry));
+        }
+        return result;
+    }
+
+    private Map<String, Object> readJsonObject(String json) throws IOException {
+        Map<String, Object> root = mapAdapter.fromJson(json);
+        if (root == null) {
+            return null;
+        }
+        return normalizeStringKeys(root);
+    }
+
+    private Map<String, Object> normalizeStringKeys(Map<?, ?> source) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            result.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        return result;
+    }
+
+    private static String safeString(Object value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? fallback : text;
+    }
+
+    OpenAiException parseOpenAiError(int status, String body) {
+        try {
+            Map<String, Object> errRoot = readJsonObject(body);
+            if (errRoot == null) {
+                return new OpenAiException(status, "http_error", "OpenAI request failed (HTTP " + status + ")");
+            }
+
+            Object errorField = errRoot.get("error");
+            if (errorField instanceof Map<?, ?> err) {
+                Map<String, Object> errMap = normalizeStringKeys(err);
+                return new OpenAiException(status,
+                        safeString(errMap.get("code"), "unknown_error"),
+                        safeString(errMap.get("message"), "OpenAI request failed"));
+            }
+            if (errorField != null) {
+                return new OpenAiException(status, "http_error", safeString(errorField, "OpenAI request failed"));
+            }
+        } catch (IOException ignored) {
+        }
+        return new OpenAiException(status, "http_error", "OpenAI request failed (HTTP " + status + ")");
     }
 
 
@@ -152,17 +207,9 @@ public enum OpenAIApi {
                                            .build();
         try (Response resp = c.newCall(req)
                               .execute()) {
-            assert resp.body() != null;
-            String respBody = resp.body()
-                                  .string();
+            String respBody = resp.body() != null ? resp.body().string() : "";
             if (!resp.isSuccessful()) {
-                var errRoot = mapAdapter.fromJson(respBody);
-                assert errRoot != null;
-                String apiCode = ((Map<?, ?>) errRoot.get("error")).get("code")
-                                                                   .toString();
-                String msg = ((Map<?, ?>) errRoot.get("error")).get("message")
-                                                               .toString();
-                throw new OpenAiException(resp.code(), apiCode, msg);
+                throw parseOpenAiError(resp.code(), respBody);
             }
 
             // Parse the response
@@ -181,18 +228,7 @@ public enum OpenAIApi {
      * Parses an OpenAI error response and throws OpenAiException.
      */
     private void throwOpenAiError(int status, String body) throws OpenAiException {
-        try {
-            Map<String, Object> errRoot = mapAdapter.fromJson(body);
-            if (errRoot != null && errRoot.get("error") instanceof Map<?, ?> err) {
-                String msg = err.get("message")
-                                .toString();
-                String code = err.get("code") != null ? err.get("code")
-                                                           .toString() : "unknown_error";
-                throw new OpenAiException(status, code, msg);
-            }
-        } catch (IOException ignored) {
-        }
-        throw new OpenAiException(status, "http_error", "HTTP " + status);
+        throw parseOpenAiError(status, body);
     }
 
     /**
