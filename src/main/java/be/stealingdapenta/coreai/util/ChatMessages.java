@@ -21,8 +21,8 @@ public final class ChatMessages {
     public static final Component INVALID_API_KEY_WITH_INSTRUCTIONS = TextBuilder.TEXT_BUILDER.reset()
                                                                                               .coreAIPrefix()
                                                                                               .append("Error: Your API key is invalid.", RED)
-                                                                                              .append(" Please type ", GRAY)
-                                                                                              .append("/setapikey <key>", GOLD)
+                                                                                              .append(" Use ", GRAY)
+                                                                                              .append("/setapikey", GOLD)
                                                                                               .append(" to set a new one.", GRAY)
                                                                                               .build();
     public static final Component MODEL_NOT_FOUND = TextBuilder.TEXT_BUILDER.reset()
@@ -49,6 +49,10 @@ public final class ChatMessages {
                                                                            .coreAIPrefix()
                                                                            .append("Your API key has been securely stored!", AQUA)
                                                                            .build();
+    public static final Component API_KEY_SAVE_FAILED = TextBuilder.TEXT_BUILDER.reset()
+                                                                                .coreAIPrefix()
+                                                                                .append("The API key is active for this session but could not be saved. Ask an administrator to check plugin storage.", RED)
+                                                                                .build();
     public static final Component API_KEY_ENTRY_CANCELLED = TextBuilder.TEXT_BUILDER.reset()
                                                                                     .coreAIPrefix()
                                                                                     .append("API key entry cancelled.", AQUA)
@@ -57,9 +61,17 @@ public final class ChatMessages {
                                                                                  .coreAIPrefix()
                                                                                  .append("Please enter your OpenAI API key in chat:", AQUA)
                                                                                  .append("\n(You can find it at https://platform.openai.com/account/api-keys)", GRAY)
-                                                                                 .append("\n It will not be shown in chat or stored in the server logs.", GRAY)
-                                                                                 .append("\n It will be encrypted before storage.", GRAY)
+                                                                                 .append("\nType cancel to stop. Chat logging plugins may still observe cancelled chat events.", GRAY)
+                                                                                 .append("\nThe key is encrypted before storage.", GRAY)
                                                                                  .build();
+    public static final Component API_KEY_ENTRY_EXPIRED = TextBuilder.TEXT_BUILDER.reset()
+                                                                                 .coreAIPrefix()
+                                                                                 .append("API key entry expired. Run /setapikey to try again.", RED)
+                                                                                 .build();
+    public static final Component API_KEY_TOO_LONG = TextBuilder.TEXT_BUILDER.reset()
+                                                                            .coreAIPrefix()
+                                                                            .append("API key input exceeds the maximum allowed length.", RED)
+                                                                            .build();
     public static final Component FETCHING_MODELS = TextBuilder.TEXT_BUILDER.reset()
                                                                             .coreAIPrefix()
                                                                             .append("Fetching available models...", AQUA)

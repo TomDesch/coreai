@@ -1,136 +1,170 @@
 package be.stealingdapenta.coreai.manager;
 
-import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
-import static be.stealingdapenta.coreai.config.Config.API_KEY;
-import static be.stealingdapenta.coreai.config.Config.MODEL;
-import static be.stealingdapenta.coreai.config.Config.TIMEOUT_MS;
-import static net.kyori.adventure.text.format.NamedTextColor.RED;
-
-import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.service.ChatAgent;
-import java.io.File;
+import be.stealingdapenta.coreai.storage.AtomicFileWriter;
+import be.stealingdapenta.coreai.storage.PersistenceService;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import net.kyori.adventure.text.Component;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.Plugin;
 
 /**
- * Singleton manager for ChatAgent sessions and per-player overrides.
+ * Manages chat agents and persistent per-player overrides.
  */
 public enum SessionManager implements Listener {
-    /**
-     * Singleton instance.
-     */
     SESSION_MANAGER;
 
-    private CryptoUtil crypto;
-
-
     private static final String OVERRIDES_FILENAME = "player_models.yml";
-
-    private final Map<UUID, ChatAgent> agents = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<UUID, String> playerKeys = new ConcurrentHashMap<>();
-    private final Map<UUID, String> playerChosenModels = new ConcurrentHashMap<>();
     private static final String KEY_FILE_NAME = "secret.key";
     private static final String KEYS_FILE_NAME = "playerkeys.yml";
-    private static final String ENCRYPTION_ALGORITHM = "AES/GCM/NoPadding";
+    private static final int MAX_API_KEY_LENGTH = 512;
 
-    private File overridesFile;
-    private FileConfiguration overridesConfig;
+    private final Map<UUID, ChatAgent> agents = new ConcurrentHashMap<>();
+    private final Map<UUID, String> playerKeys = new ConcurrentHashMap<>();
+    private final Map<UUID, String> playerChosenModels = new ConcurrentHashMap<>();
+    private final Object keyLock = new Object();
+    private final Object modelLock = new Object();
+
+    private volatile CryptoUtil crypto;
+    private volatile PersistenceService persistence;
+    private volatile Logger logger;
+    private volatile String defaultApiKey = "";
+    private volatile String defaultModel;
+    private volatile int timeoutMs;
+    private volatile boolean initialized;
+    private Path keyFile;
+    private Path keysFile;
+    private Path overridesFile;
+    private long keysVersion;
+    private long persistedKeysVersion;
+    private long modelsVersion;
+    private long persistedModelsVersion;
+    private CompletableFuture<Void> keyWriteInFlight;
+    private CompletableFuture<Void> modelWriteInFlight;
 
     /**
-     * Initializes the session manager: load persisted models and keys, and register listener.
+     * Loads the encryption key and player overrides on the persistence executor.
+     * Malformed files fail initialization instead of being treated as empty data.
      */
-    public void initialize() {
-        this.crypto = new CryptoUtil(new File(CoreAI.getInstance()
-                                                    .getDataFolder(), KEY_FILE_NAME));
-        loadModelOverrides();
-        loadStoredAPIKeys();
+    public CompletableFuture<Void> initialize(
+            Path dataDirectory,
+            PersistenceService persistence,
+            Logger logger,
+            String defaultApiKey,
+            String defaultModel,
+            int timeoutMs) {
+        this.persistence = persistence;
+        this.logger = logger;
+        this.defaultApiKey = defaultApiKey;
+        this.defaultModel = defaultModel;
+        this.timeoutMs = timeoutMs;
+        this.keyFile = dataDirectory.resolve(KEY_FILE_NAME);
+        this.keysFile = dataDirectory.resolve(KEYS_FILE_NAME);
+        this.overridesFile = dataDirectory.resolve(OVERRIDES_FILENAME);
+        initialized = false;
+
+        return persistence.submitIo(() -> {
+            CryptoUtil loadedCrypto = new CryptoUtil(keyFile);
+            Map<UUID, String> loadedModels = readPlayerData(overridesFile, false);
+            Map<UUID, String> encryptedKeys = readPlayerData(keysFile, true);
+            Map<UUID, String> loadedKeys = new HashMap<>();
+            for (Map.Entry<UUID, String> entry : encryptedKeys.entrySet()) {
+                loadedKeys.put(entry.getKey(), loadedCrypto.decrypt(entry.getValue()));
+            }
+
+            crypto = loadedCrypto;
+            playerChosenModels.clear();
+            playerChosenModels.putAll(loadedModels);
+            playerKeys.clear();
+            playerKeys.putAll(loadedKeys);
+            synchronized (keyLock) {
+                keysVersion = 0;
+                persistedKeysVersion = 0;
+                keyWriteInFlight = null;
+            }
+            synchronized (modelLock) {
+                modelsVersion = 0;
+                persistedModelsVersion = 0;
+                modelWriteInFlight = null;
+            }
+            initialized = true;
+            return null;
+        });
     }
 
-    @SuppressWarnings("ResultOfMethodCallIgnored")
-    private void loadModelOverrides() {
-        Plugin plugin = CoreAI.getInstance();
-        overridesFile = new File(plugin.getDataFolder(), OVERRIDES_FILENAME);
-        if (!overridesFile.exists()) {
-            try {
-                plugin.getDataFolder()
-                      .mkdirs();
-                overridesFile.createNewFile();
-            } catch (IOException e) {
-                CORE_AI_LOGGER.severe("Could not create " + OVERRIDES_FILENAME + ": " + e.getMessage());
-            }
+    private Map<UUID, String> readPlayerData(Path file, boolean encryptedKeys) throws IOException {
+        Map<UUID, String> result = new HashMap<>();
+        if (Files.notExists(file)) {
+            return result;
         }
-        overridesConfig = YamlConfiguration.loadConfiguration(overridesFile);
-        for (String key : overridesConfig.getKeys(false)) {
-            try {
-                UUID id = UUID.fromString(key);
-                String model = overridesConfig.getString(key);
-                if (model != null) {
-                    playerChosenModels.put(id, model);
-                }
-            } catch (IllegalArgumentException ignore) {
-            }
+        if (!Files.isRegularFile(file) || !Files.isReadable(file)) {
+            throw new IOException("Player data file cannot be read: " + file.getFileName());
         }
+
+        FileConfiguration configuration = new YamlConfiguration();
+        try {
+            configuration.load(file.toFile());
+        } catch (InvalidConfigurationException exception) {
+            throw new IOException("Player data file contains invalid YAML: " + file.getFileName(), exception);
+        }
+        for (String key : configuration.getKeys(false)) {
+            UUID playerId;
+            try {
+                playerId = UUID.fromString(key);
+            } catch (IllegalArgumentException exception) {
+                throw new IOException("Player data file contains an invalid player identifier: " + file.getFileName(), exception);
+            }
+
+            Object value = configuration.get(key);
+            if (!(value instanceof String stringValue) || stringValue.isBlank()) {
+                throw new IOException("Player data file contains an invalid value: " + file.getFileName());
+            }
+            if (encryptedKeys && stringValue.length() > 4096) {
+                throw new IOException("Encrypted player key exceeds the allowed size.");
+            }
+            if (!encryptedKeys && stringValue.length() > 256) {
+                throw new IOException("Player model override exceeds the allowed size.");
+            }
+            result.put(playerId, stringValue);
+        }
+        return result;
     }
 
-    @SuppressWarnings("ResultOfMethodCallIgnored")
-    private void loadStoredAPIKeys() {
-        Plugin plugin = CoreAI.getInstance();
-        plugin.getDataFolder()
-              .mkdirs();
-
-        CryptoUtil crypto = new CryptoUtil(new File(plugin.getDataFolder(), KEY_FILE_NAME));
-        File keysFile = new File(plugin.getDataFolder(), KEYS_FILE_NAME);
-        FileConfiguration keysConfig = YamlConfiguration.loadConfiguration(keysFile);
-
-        // Load existing encrypted keys
-        for (String uuidStr : keysConfig.getKeys(false)) {
-            String encrypted = keysConfig.getString(uuidStr);
-
-            if (encrypted == null || encrypted.isBlank()) {
-                continue;
-            }
-
-            try {
-                String decrypted = crypto.decrypt(encrypted);
-                setPlayerAPIKey(UUID.fromString(uuidStr), decrypted);
-            } catch (Exception e) {
-                CORE_AI_LOGGER.log(Level.SEVERE, Component.text("Failed to decrypt API key for player " + uuidStr, RED)
-                                                          .toString(), e);
-            }
-        }
+    public boolean isInitialized() {
+        return initialized;
     }
 
     /**
-     * Retrieves or creates a ChatAgent for the player, applying model and API key overrides.
-     *
-     * @param uuid Player UUID
-     * @return ChatAgent instance
+     * Retrieves or creates the player's chat agent after stored credentials are loaded.
      */
     public ChatAgent getAgent(UUID uuid) {
-        return agents.computeIfAbsent(uuid, id -> {
-            String apiKey = playerKeys.getOrDefault(id, API_KEY.get());
-            String model = playerChosenModels.getOrDefault(id, MODEL.get());
-            int timeout = TIMEOUT_MS.get();
-            return new ChatAgent(apiKey, model, timeout);
-        });
+        if (!initialized) {
+            throw new IllegalStateException("Player data has not finished loading.");
+        }
+        return agents.computeIfAbsent(uuid, id -> new ChatAgent(
+                playerKeys.getOrDefault(id, defaultApiKey),
+                playerChosenModels.getOrDefault(id, defaultModel),
+                timeoutMs));
     }
 
     public boolean isCurrentAgent(UUID uuid, ChatAgent agent) {
@@ -138,75 +172,139 @@ public enum SessionManager implements Listener {
     }
 
     /**
-     * Persists the selected model for a player.
-     *
-     * @param uuid  Player UUID
-     * @param model Model ID chosen
+     * Updates a player's model immediately and returns the result of its atomic save.
      */
-    public void setPlayerModel(UUID uuid, String model) {
+    public CompletableFuture<Void> setPlayerModel(UUID uuid, String model) {
+        ensureInitialized();
+        if (model == null || model.isBlank() || model.length() > 256) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid model identifier."));
+        }
         playerChosenModels.put(uuid, model);
         ChatAgent agent = agents.get(uuid);
         if (agent != null) {
             agent.setModel(model);
         }
-
-        // save to disk
-        overridesConfig.set(uuid.toString(), model);
-        try {
-            overridesConfig.save(overridesFile);
-        } catch (IOException e) {
-            CORE_AI_LOGGER.severe("Failed to save " + OVERRIDES_FILENAME + ": " + e.getMessage());
+        synchronized (modelLock) {
+            modelsVersion++;
+            return persistModelsLocked(modelsVersion);
         }
     }
 
     /**
-     * Sets and persists the player's API key securely.
-     *
-     * @param uuid   Player UUID
-     * @param apiKey The raw API key
+     * Updates a player's credential immediately and returns the result of its atomic save.
      */
-    public void setPlayerAPIKey(UUID uuid, String apiKey) {
+    public CompletableFuture<Void> setPlayerAPIKey(UUID uuid, String apiKey) {
+        ensureInitialized();
+        if (uuid == null || apiKey == null || apiKey.isBlank() || apiKey.length() > MAX_API_KEY_LENGTH) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid API key input."));
+        }
         playerKeys.put(uuid, apiKey);
-
         ChatAgent agent = agents.get(uuid);
         if (agent != null) {
             agent.setApiKey(apiKey);
         }
-
-        // Encrypt and save the API key to disk
-        try {
-            Plugin plugin = CoreAI.getInstance();
-            File keysFile = new File(plugin.getDataFolder(), KEYS_FILE_NAME);
-            FileConfiguration keysConfig = YamlConfiguration.loadConfiguration(keysFile);
-
-            String encrypted = crypto.encrypt(apiKey);
-
-            keysConfig.set(uuid.toString(), encrypted);
-            keysConfig.save(keysFile);
-        } catch (IOException e) {
-            CORE_AI_LOGGER.log(Level.SEVERE, "Failed to save player API key for " + uuid, e);
+        synchronized (keyLock) {
+            keysVersion++;
+            return persistKeysLocked(keysVersion);
         }
     }
 
+    private CompletableFuture<Void> persistKeysLocked(long version) {
+        Map<UUID, String> snapshot = Map.copyOf(playerKeys);
+        CompletableFuture<Void> write = persistence.submitIo(() -> {
+            FileConfiguration configuration = new YamlConfiguration();
+            for (Map.Entry<UUID, String> entry : snapshot.entrySet()) {
+                configuration.set(entry.getKey().toString(), crypto.encrypt(entry.getValue()));
+            }
+            AtomicFileWriter.write(keysFile, configuration.saveToString().getBytes(StandardCharsets.UTF_8));
+            return null;
+        });
+        keyWriteInFlight = write;
+        write.whenComplete((ignored, error) -> {
+            synchronized (keyLock) {
+                if (error == null) {
+                    persistedKeysVersion = Math.max(persistedKeysVersion, version);
+                }
+                if (keyWriteInFlight == write) {
+                    keyWriteInFlight = null;
+                }
+            }
+            if (error != null && logger != null) {
+                logger.severe("Failed to persist player API keys. The in-memory update remains active.");
+            }
+        });
+        return write;
+    }
 
-    /**
-     * Clears the agent when a player quits to free memory.
-     *
-     * @param event Quit event
-     */
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        UUID id = event.getPlayer()
-                       .getUniqueId();
-        agents.remove(id);
+    private CompletableFuture<Void> persistModelsLocked(long version) {
+        Map<UUID, String> snapshot = Map.copyOf(playerChosenModels);
+        CompletableFuture<Void> write = persistence.submitIo(() -> {
+            FileConfiguration configuration = new YamlConfiguration();
+            for (Map.Entry<UUID, String> entry : snapshot.entrySet()) {
+                configuration.set(entry.getKey().toString(), entry.getValue());
+            }
+            AtomicFileWriter.write(overridesFile, configuration.saveToString().getBytes(StandardCharsets.UTF_8));
+            return null;
+        });
+        modelWriteInFlight = write;
+        write.whenComplete((ignored, error) -> {
+            synchronized (modelLock) {
+                if (error == null) {
+                    persistedModelsVersion = Math.max(persistedModelsVersion, version);
+                }
+                if (modelWriteInFlight == write) {
+                    modelWriteInFlight = null;
+                }
+            }
+            if (error != null && logger != null) {
+                logger.severe("Failed to persist player model overrides. The in-memory update remains active.");
+            }
+        });
+        return write;
     }
 
     /**
-     * Utility for AES-GCM encryption/decryption with a key stored in a file.
+     * Requeues the latest snapshots for writes that failed earlier.
      */
-    private static class CryptoUtil {
+    public CompletableFuture<Void> retryPendingWrites() {
+        ensureInitialized();
+        CompletableFuture<Void> keys = CompletableFuture.completedFuture(null);
+        CompletableFuture<Void> models = CompletableFuture.completedFuture(null);
+        synchronized (keyLock) {
+            if (keysVersion > persistedKeysVersion && (keyWriteInFlight == null || keyWriteInFlight.isDone())) {
+                keys = persistKeysLocked(keysVersion);
+            } else if (keyWriteInFlight != null) {
+                keys = keyWriteInFlight;
+            }
+        }
+        synchronized (modelLock) {
+            if (modelsVersion > persistedModelsVersion && (modelWriteInFlight == null || modelWriteInFlight.isDone())) {
+                models = persistModelsLocked(modelsVersion);
+            } else if (modelWriteInFlight != null) {
+                models = modelWriteInFlight;
+            }
+        }
+        return CompletableFuture.allOf(keys, models);
+    }
 
-        private static final String ALGO = ENCRYPTION_ALGORITHM;
+    public void clearAgents() {
+        agents.clear();
+    }
+
+    private void ensureInitialized() {
+        if (!initialized) {
+            throw new IllegalStateException("Player data has not finished loading.");
+        }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        agents.remove(event.getPlayer().getUniqueId());
+    }
+
+    private static final class CryptoUtil {
+
+        private static final String ALGORITHM = "AES/GCM/NoPadding";
         private static final int KEY_SIZE = 256;
         private static final int TAG_SIZE = 128;
         private static final int IV_SIZE = 12;
@@ -214,65 +312,65 @@ public enum SessionManager implements Listener {
         private final SecretKey key;
         private final SecureRandom random = new SecureRandom();
 
-        public CryptoUtil(File keyFile) {
-            if (keyFile.exists()) {
-                try {
-                    byte[] b64 = java.nio.file.Files.readAllBytes(keyFile.toPath());
-                    byte[] raw = Base64.getDecoder()
-                                       .decode(b64);
-                    this.key = new SecretKeySpec(raw, "AES");
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to load encryption key", e);
+        private CryptoUtil(Path keyFile) throws IOException {
+            if (!Files.notExists(keyFile)) {
+                if (!Files.isRegularFile(keyFile) || !Files.isReadable(keyFile)) {
+                    throw new IOException("Stored encryption key cannot be read.");
                 }
-            } else {
+                byte[] encoded;
                 try {
-                    KeyGenerator gen = KeyGenerator.getInstance("AES");
-                    gen.init(KEY_SIZE);
-                    SecretKey sk = gen.generateKey();
-                    byte[] raw = sk.getEncoded();
-                    byte[] b64 = Base64.getEncoder()
-                                       .encode(raw);
-                    java.nio.file.Files.write(keyFile.toPath(), b64);
-                    this.key = sk;
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to generate encryption key", e);
+                    encoded = Base64.getDecoder().decode(Files.readAllBytes(keyFile));
+                } catch (IllegalArgumentException exception) {
+                    throw new IOException("Stored encryption key is invalid.", exception);
                 }
+                if (encoded.length != KEY_SIZE / Byte.SIZE) {
+                    throw new IOException("Stored encryption key has an invalid size.");
+                }
+                key = new SecretKeySpec(encoded, "AES");
+                return;
+            }
+
+            try {
+                KeyGenerator generator = KeyGenerator.getInstance("AES");
+                generator.init(KEY_SIZE);
+                key = generator.generateKey();
+                AtomicFileWriter.write(keyFile, Base64.getEncoder().encode(key.getEncoded()));
+            } catch (GeneralSecurityException exception) {
+                throw new IOException("Could not create the stored encryption key.", exception);
             }
         }
 
-        public String encrypt(String plaintext) {
+        private String encrypt(String plaintext) throws IOException {
             try {
                 byte[] iv = new byte[IV_SIZE];
                 random.nextBytes(iv);
-                GCMParameterSpec spec = new GCMParameterSpec(TAG_SIZE, iv);
-                Cipher cipher = Cipher.getInstance(ALGO);
-                cipher.init(Cipher.ENCRYPT_MODE, key, spec);
-                byte[] ct = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
-                byte[] combined = new byte[iv.length + ct.length];
+                Cipher cipher = Cipher.getInstance(ALGORITHM);
+                cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_SIZE, iv));
+                byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+                byte[] combined = new byte[iv.length + encrypted.length];
                 System.arraycopy(iv, 0, combined, 0, iv.length);
-                System.arraycopy(ct, 0, combined, iv.length, ct.length);
-                return Base64.getEncoder()
-                             .encodeToString(combined);
-            } catch (Exception e) {
-                throw new RuntimeException("Encryption error", e);
+                System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
+                return Base64.getEncoder().encodeToString(combined);
+            } catch (GeneralSecurityException exception) {
+                throw new IOException("Could not encrypt a stored player credential.", exception);
             }
         }
 
-        public String decrypt(String cipherText) {
+        private String decrypt(String ciphertext) throws IOException {
             try {
-                byte[] all = Base64.getDecoder()
-                                   .decode(cipherText);
+                byte[] combined = Base64.getDecoder().decode(ciphertext);
+                if (combined.length <= IV_SIZE + TAG_SIZE / Byte.SIZE) {
+                    throw new IOException("Stored player credential is malformed.");
+                }
                 byte[] iv = new byte[IV_SIZE];
-                byte[] ct = new byte[all.length - IV_SIZE];
-                System.arraycopy(all, 0, iv, 0, IV_SIZE);
-                System.arraycopy(all, IV_SIZE, ct, 0, ct.length);
-                GCMParameterSpec spec = new GCMParameterSpec(TAG_SIZE, iv);
-                Cipher cipher = Cipher.getInstance(ALGO);
-                cipher.init(Cipher.DECRYPT_MODE, key, spec);
-                byte[] pt = cipher.doFinal(ct);
-                return new String(pt, StandardCharsets.UTF_8);
-            } catch (Exception e) {
-                throw new RuntimeException("Decryption error", e);
+                byte[] encrypted = new byte[combined.length - IV_SIZE];
+                System.arraycopy(combined, 0, iv, 0, IV_SIZE);
+                System.arraycopy(combined, IV_SIZE, encrypted, 0, encrypted.length);
+                Cipher cipher = Cipher.getInstance(ALGORITHM);
+                cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_SIZE, iv));
+                return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException | GeneralSecurityException exception) {
+                throw new IOException("Stored player credential could not be decrypted.", exception);
             }
         }
     }

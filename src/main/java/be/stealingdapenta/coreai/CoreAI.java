@@ -2,6 +2,8 @@ package be.stealingdapenta.coreai;
 
 import static be.stealingdapenta.coreai.config.Config.API_KEY;
 import static be.stealingdapenta.coreai.config.Config.AUTO_CLEANUP_ENABLED;
+import static be.stealingdapenta.coreai.config.Config.MODEL;
+import static be.stealingdapenta.coreai.config.Config.TIMEOUT_MS;
 import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 import static be.stealingdapenta.coreai.map.LastSeenTracker.LAST_SEEN_TRACKER;
 import static be.stealingdapenta.coreai.map.MapStorage.MAP_STORAGE;
@@ -12,11 +14,13 @@ import be.stealingdapenta.coreai.command.ImageGenMapCommand;
 import be.stealingdapenta.coreai.command.ImageMapCommand;
 import be.stealingdapenta.coreai.command.ModelCommand;
 import be.stealingdapenta.coreai.command.ModelInfoCommand;
+import be.stealingdapenta.coreai.command.SetApiKeyCommand;
 import be.stealingdapenta.coreai.gui.ModelSelectorGUI;
 import be.stealingdapenta.coreai.listener.AsyncApiKeyListener;
 import be.stealingdapenta.coreai.listener.MapUsageTrackerListener;
 import be.stealingdapenta.coreai.service.BackgroundTaskService;
-import java.util.Arrays;
+import be.stealingdapenta.coreai.storage.PersistenceService;
+import java.nio.file.Path;
 import java.util.Objects;
 import java.util.logging.Logger;
 import java.util.concurrent.TimeUnit;
@@ -38,6 +42,9 @@ public class CoreAI extends JavaPlugin {
 
     private static CoreAI instance;
     private BackgroundTaskService backgroundTasks;
+    private PersistenceService persistence;
+    private AsyncApiKeyListener apiKeyListener;
+    private ModelSelectorGUI modelSelectorGUI;
     private volatile boolean shuttingDown;
     private static final int WORKER_THREADS = 4;
     private static final int MAX_QUEUED_TASKS = 16;
@@ -51,63 +58,56 @@ public class CoreAI extends JavaPlugin {
         instance = this;
         shuttingDown = false;
         backgroundTasks = new BackgroundTaskService(WORKER_THREADS, MAX_QUEUED_TASKS);
+        persistence = new PersistenceService();
 
-        // Save the default config if missing
         saveDefaultConfig();
-        // Merge new defaults from the plugin jar without overwriting existing values
-        getConfig().options()
-                   .copyDefaults(true);
-        saveConfig(); // Persist merged values to disk
 
         CORE_AI_LOGGER = this.getLogger();
         CORE_AI_LOGGER.info(ANSI_YELLOW + "Enabling CoreAI" + ANSI_RESET);
 
         validateDefaultAPIKey();
 
-        // Initialize the SessionManager and MapStorage
-        SESSION_MANAGER.initialize();
+        apiKeyListener = new AsyncApiKeyListener();
+        modelSelectorGUI = new ModelSelectorGUI();
+        getServer().getPluginManager().registerEvents(apiKeyListener, this);
+        getServer().getPluginManager().registerEvents(modelSelectorGUI, this);
+
+        Path dataDirectory = getDataFolder().toPath();
+        SESSION_MANAGER.initialize(dataDirectory, persistence, CORE_AI_LOGGER,
+                API_KEY.get(), MODEL.get(), TIMEOUT_MS.get())
+                .whenComplete((ignored, error) -> runMain(() -> {
+                    if (error != null) {
+                        CORE_AI_LOGGER.severe("Failed to load CoreAI player data. Plugin startup has been stopped to protect stored credentials.");
+                        getServer().getPluginManager().disablePlugin(this);
+                        return;
+                    }
+                    finishInitialization();
+                }));
+    }
+
+    private void finishInitialization() {
+        getServer().getPluginManager().registerEvents(SESSION_MANAGER, this);
+        getServer().getPluginManager().registerEvents(new MapUsageTrackerListener(), this);
 
         LAST_SEEN_TRACKER.load();
-
         MAP_STORAGE.initialize();
-        // Schedule renderers to be restored after worlds are ready,
-        // The server does not begin ticking until after all plugins are enabled and all worlds are fully loaded.
-        Bukkit.getScheduler()
-              .runTask(this, () -> {
-                  try {
-                      MAP_STORAGE.restoreAllMapRenderers();
-                      runAutoMapCleaner();
-                      CORE_AI_LOGGER.info("Restored all map renderers.");
-                  } catch (Exception e) {
-                      CORE_AI_LOGGER.severe("Failed to initialize map storage: " + e.getMessage());
-                      CORE_AI_LOGGER.info(Arrays.toString(e.getStackTrace()));
-                  }
-              });
+        Bukkit.getScheduler().runTask(this, () -> {
+            try {
+                MAP_STORAGE.restoreAllMapRenderers();
+                runAutoMapCleaner();
+                CORE_AI_LOGGER.info("Restored all map renderers.");
+            } catch (Exception exception) {
+                CORE_AI_LOGGER.severe("Failed to initialize map storage: " + exception.getMessage());
+            }
+        });
 
-        // Register events
-        getServer().getPluginManager()
-                   .registerEvents(new AsyncApiKeyListener(), this); // this listener prevents the raw API key from appearing in the console when players run setapikey 'command'
-        ModelSelectorGUI gui = new ModelSelectorGUI();
-        getServer().getPluginManager()
-                   .registerEvents(gui, this);
-        getServer().getPluginManager()
-                   .registerEvents(SESSION_MANAGER, this);
-        getServer().getPluginManager()
-                   .registerEvents(new MapUsageTrackerListener(), this);
-
-        // Register commands with proper executors
-        Objects.requireNonNull(getCommand("chat"))
-               .setExecutor(new ChatCommand());
-        Objects.requireNonNull(getCommand("models"))
-               .setExecutor(new ModelCommand(gui));
-        Objects.requireNonNull(getCommand("modelinfo"))
-               .setExecutor(new ModelInfoCommand());
-        Objects.requireNonNull(getCommand("imagemap"))
-               .setExecutor(new ImageMapCommand());
-        Objects.requireNonNull(getCommand("imagegenmap"))
-               .setExecutor(new ImageGenMapCommand());
-        Objects.requireNonNull(getCommand("cleanup"))
-               .setExecutor(new ImageCleanupCommand());
+        Objects.requireNonNull(getCommand("setapikey")).setExecutor(new SetApiKeyCommand(apiKeyListener));
+        Objects.requireNonNull(getCommand("chat")).setExecutor(new ChatCommand());
+        Objects.requireNonNull(getCommand("models")).setExecutor(new ModelCommand(modelSelectorGUI));
+        Objects.requireNonNull(getCommand("modelinfo")).setExecutor(new ModelInfoCommand());
+        Objects.requireNonNull(getCommand("imagemap")).setExecutor(new ImageMapCommand());
+        Objects.requireNonNull(getCommand("imagegenmap")).setExecutor(new ImageGenMapCommand());
+        Objects.requireNonNull(getCommand("cleanup")).setExecutor(new ImageCleanupCommand());
 
         CORE_AI_LOGGER.info(ANSI_GREEN + "CoreAI ready to roll!" + ANSI_RESET);
     }
@@ -144,13 +144,31 @@ public class CoreAI extends JavaPlugin {
         });
     }
 
+    public PersistenceService getPersistence() {
+        return persistence;
+    }
+
+    public boolean isShuttingDown() {
+        return shuttingDown;
+    }
+
     @Override
     public void onDisable() {
         shuttingDown = true;
         if (backgroundTasks != null) {
             backgroundTasks.shutdown(5, TimeUnit.SECONDS);
         }
+        if (apiKeyListener != null) {
+            apiKeyListener.clearPendingInputs();
+        }
+        if (SESSION_MANAGER.isInitialized()) {
+            SESSION_MANAGER.retryPendingWrites();
+            SESSION_MANAGER.clearAgents();
+        }
         LAST_SEEN_TRACKER.save();
+        if (persistence != null) {
+            persistence.shutdown();
+        }
         CORE_AI_LOGGER.info(ANSI_RED + "CoreAI disabled." + ANSI_RESET);
     }
 }
