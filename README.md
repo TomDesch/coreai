@@ -8,7 +8,7 @@ verified with JDK 27.
 
 ## Install
 
-1. Download the shaded `coreai-1.2.0.jar` from a release or build it as
+1. Download the shaded `coreai-2.0.0.jar` from a release or build it as
    described below.
 2. Place the JAR in the server's `plugins` directory and start the server.
 3. Configure an optional server-wide OpenAI API key in
@@ -66,7 +66,7 @@ The Maven wrapper is included. Building has been verified with JDK 27:
 python .github/scripts/verify_artifact.py
 ```
 
-The shaded plugin JAR is written to `target/coreai-1.2.0.jar`. The Spigot API
+The shaded plugin JAR is written to `target/coreai-2.0.0.jar`. The Spigot API
 is compile-time-only; Paper is not required to build the plugin. Runtime
 libraries are included and relocated in the shaded artifact.
 

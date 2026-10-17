@@ -1,4 +1,4 @@
-# CoreAI Configuration — v1.2.0
+# CoreAI Configuration - v2.0.0
 
 openai:
   # Server-wide default API key (optional). Leave empty to require players to set their own key.
