@@ -63,6 +63,28 @@ class SessionManagerPersistenceTest {
         }
     }
 
+    @Test
+    void doesNotCreateAReplacementKeyWhenEncryptedCredentialsExistWithoutTheirKey() throws Exception {
+        Path directory = createDataDirectory();
+        Path keysFile = directory.resolve("playerkeys.yml");
+        Files.writeString(keysFile, UUID.randomUUID() + ": stored-ciphertext\n");
+        String originalKeys = Files.readString(keysFile);
+        PersistenceService persistence = new PersistenceService();
+        try {
+            CompletionException exception = assertThrows(CompletionException.class,
+                    () -> SessionManager.SESSION_MANAGER.initialize(directory, persistence,
+                            Logger.getAnonymousLogger(), "", "gpt-test", 10_000).join());
+
+            assertTrue(exception.getCause() instanceof IOException);
+            assertFalse(Files.exists(directory.resolve("secret.key")));
+            assertEquals(originalKeys, Files.readString(keysFile));
+        } finally {
+            SessionManager.SESSION_MANAGER.clearAgents();
+            persistence.shutdown();
+            deleteTree(directory);
+        }
+    }
+
     private static Path createDataDirectory() throws IOException {
         Path parent = Path.of("target", "test-data", "session-manager");
         Files.createDirectories(parent);

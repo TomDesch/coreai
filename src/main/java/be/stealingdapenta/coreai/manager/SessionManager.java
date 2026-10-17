@@ -84,9 +84,12 @@ public enum SessionManager implements Listener {
         initialized = false;
 
         return persistence.submitIo(() -> {
-            CryptoUtil loadedCrypto = new CryptoUtil(keyFile);
             Map<UUID, String> loadedModels = readPlayerData(overridesFile, false);
             Map<UUID, String> encryptedKeys = readPlayerData(keysFile, true);
+            if (!encryptedKeys.isEmpty() && Files.notExists(keyFile)) {
+                throw new IOException("Encryption key is missing while encrypted player credentials exist.");
+            }
+            CryptoUtil loadedCrypto = new CryptoUtil(keyFile);
             Map<UUID, String> loadedKeys = new HashMap<>();
             for (Map.Entry<UUID, String> entry : encryptedKeys.entrySet()) {
                 loadedKeys.put(entry.getKey(), loadedCrypto.decrypt(entry.getValue()));
