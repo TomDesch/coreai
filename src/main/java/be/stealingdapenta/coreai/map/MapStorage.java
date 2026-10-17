@@ -11,15 +11,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -42,6 +43,9 @@ public enum MapStorage {
     private final ConcurrentMap<Integer, BufferedImage> mapImages = new ConcurrentHashMap<>();
     private final Set<Integer> storedMapIds = ConcurrentHashMap.newKeySet();
     private final Set<Integer> restoredMapIds = ConcurrentHashMap.newKeySet();
+    private final ConcurrentMap<Integer, Long> mapGenerations = new ConcurrentHashMap<>();
+    private final AtomicLong generationSequence = new AtomicLong();
+    private final Object stateLock = new Object();
     private volatile PersistenceService persistence;
     private volatile Logger logger;
     private Path directory;
@@ -55,11 +59,17 @@ public enum MapStorage {
         directory = dataDirectory.resolve(DIR_NAME);
         return persistence.submitIo(this::readStoredImages)
                 .thenAccept(images -> {
-                    mapImages.clear();
-                    storedMapIds.clear();
-                    restoredMapIds.clear();
-                    mapImages.putAll(images);
-                    storedMapIds.addAll(images.keySet());
+                    synchronized (stateLock) {
+                        mapImages.clear();
+                        storedMapIds.clear();
+                        restoredMapIds.clear();
+                        mapGenerations.clear();
+                        mapImages.putAll(images);
+                        storedMapIds.addAll(images.keySet());
+                        for (int id : images.keySet()) {
+                            mapGenerations.put(id, generationSequence.incrementAndGet());
+                        }
+                    }
                 });
     }
 
@@ -141,33 +151,32 @@ public enum MapStorage {
         }
     }
 
-    public CompletableFuture<Void> saveNewMap(MapView view, BufferedImage image) {
+    public SaveHandle saveNewMap(MapView view, BufferedImage image) {
         if (!Bukkit.isPrimaryThread()) {
             throw new IllegalStateException("Map views must be saved from the server thread.");
         }
+        return saveNewMap(view.getId(), image);
+    }
+
+    SaveHandle saveNewMap(int id, BufferedImage image) {
         if (image.getWidth() != MAP_SIZE || image.getHeight() != MAP_SIZE) {
-            return CompletableFuture.failedFuture(new IllegalArgumentException("Map tile dimensions must be 128x128."));
+            throw new IllegalArgumentException("Map tile dimensions must be 128x128.");
         }
-
-        int id = view.getId();
-        if (!storedMapIds.contains(id) && storedMapIds.size() >= MAX_STORED_MAPS) {
-            return CompletableFuture.failedFuture(new IOException("Stored map image limit reached."));
-        }
-        mapImages.put(id, image);
-        storedMapIds.add(id);
-        restoredMapIds.add(id);
-        LAST_SEEN_TRACKER.markSeen(id);
-
-        Path imageFile = mapPath(id);
-        return persistence.writeImage(imageFile, image).whenComplete((ignored, error) -> {
-            if (error != null) {
-                mapImages.remove(id, image);
-                storedMapIds.remove(id);
-                restoredMapIds.remove(id);
-                LAST_SEEN_TRACKER.forget(id);
-                logger.warning("Failed to persist image data for map " + id + ".");
+        long generation;
+        long seenAt;
+        synchronized (stateLock) {
+            if (!storedMapIds.contains(id) && storedMapIds.size() >= MAX_STORED_MAPS) {
+                throw new IllegalStateException("Stored map image limit reached.");
             }
-        });
+            generation = generationSequence.incrementAndGet();
+            mapGenerations.put(id, generation);
+            mapImages.put(id, image);
+            storedMapIds.add(id);
+            restoredMapIds.add(id);
+            seenAt = LAST_SEEN_TRACKER.markSeen(id);
+        }
+        CompletableFuture<Void> write = persistence.writeImage(mapPath(id), image);
+        return new SaveHandle(id, generation, seenAt, write);
     }
 
     public void restoreRenderer(MapView view) {
@@ -186,36 +195,85 @@ public enum MapStorage {
         int maxAgeDays = CoreAI.getInstance().getConfigSnapshot().cleanupMaxAgeDays();
         long maxAgeMillis = Math.multiplyExact(Math.multiplyExact((long) maxAgeDays, 24L), 60L * 60L * 1000L);
         long now = System.currentTimeMillis();
-        Set<Integer> candidates = new HashSet<>(storedMapIds);
+        Map<Integer, Long> candidates = new HashMap<>(mapGenerations);
 
         return persistence.submitIo(() -> {
-            List<Integer> deletedIds = new ArrayList<>();
-            for (int id : candidates) {
-                long lastSeen = LAST_SEEN_TRACKER.getLastSeen(id);
-                if (!LastSeenTracker.isStale(lastSeen, now, maxAgeMillis)) {
-                    continue;
-                }
+            List<Map.Entry<Integer, Long>> deletedMaps = new ArrayList<>();
+            for (Map.Entry<Integer, Long> candidate : candidates.entrySet()) {
+                int id = candidate.getKey();
                 try {
-                    if (Files.deleteIfExists(mapPath(id))) {
-                        deletedIds.add(id);
+                    boolean deleted = LAST_SEEN_TRACKER.deleteIfStale(id, now, maxAgeMillis,
+                            () -> Files.deleteIfExists(mapPath(id)));
+                    if (deleted) {
+                        deletedMaps.add(Map.entry(id, candidate.getValue()));
                     }
                 } catch (IOException exception) {
                     logger.warning("Could not remove stale map image " + id + ": " + exception.getMessage());
                 }
             }
-            return deletedIds;
+            return deletedMaps;
         }).thenCompose(deletedIds -> {
-            for (int id : deletedIds) {
-                storedMapIds.remove(id);
-                mapImages.remove(id);
-                restoredMapIds.remove(id);
-                LAST_SEEN_TRACKER.forget(id);
+            for (Map.Entry<Integer, Long> deletedMap : deletedIds) {
+                synchronized (stateLock) {
+                    if (mapGenerations.remove(deletedMap.getKey(), deletedMap.getValue())) {
+                        storedMapIds.remove(deletedMap.getKey());
+                        mapImages.remove(deletedMap.getKey());
+                        restoredMapIds.remove(deletedMap.getKey());
+                    }
+                }
             }
             return LAST_SEEN_TRACKER.saveAsync().thenApply(ignored -> deletedIds.size());
         });
     }
 
+    CompletableFuture<Void> rollbackBatch(List<SaveHandle> maps) {
+        return persistence.submitIo(() -> {
+            IOException failure = null;
+            for (SaveHandle map : maps) {
+                if (!isCurrentGeneration(map)) {
+                    continue;
+                }
+                try {
+                    Files.deleteIfExists(mapPath(map.id()));
+                    synchronized (stateLock) {
+                        if (mapGenerations.remove(map.id(), map.generation())) {
+                            storedMapIds.remove(map.id());
+                            mapImages.remove(map.id());
+                            restoredMapIds.remove(map.id());
+                            LAST_SEEN_TRACKER.forgetIfUnchanged(map.id(), map.seenAt());
+                        }
+                    }
+                } catch (IOException exception) {
+                    if (failure == null) {
+                        failure = exception;
+                    } else {
+                        failure.addSuppressed(exception);
+                    }
+                }
+            }
+            return failure;
+        }).thenCompose(failure -> {
+            CompletableFuture<Void> seenSave = LAST_SEEN_TRACKER.saveAsync();
+            if (failure == null) {
+                return seenSave;
+            }
+            return seenSave.<Void>handle((ignored, saveError) -> {
+                if (saveError != null) {
+                    failure.addSuppressed(saveError);
+                }
+                throw new CompletionException(failure);
+            });
+        });
+    }
+
+    private boolean isCurrentGeneration(SaveHandle map) {
+        return mapGenerations.getOrDefault(map.id(), -1L) == map.generation();
+    }
+
     private Path mapPath(int id) {
         return directory.resolve(FILE_PREFIX + id + FILE_SUFFIX);
+    }
+
+    record SaveHandle(int id, long generation, long seenAt, CompletableFuture<Void> write) {
     }
 }

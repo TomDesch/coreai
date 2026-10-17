@@ -23,6 +23,7 @@ import be.stealingdapenta.coreai.service.OpenAIApi;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
 import java.util.UUID;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -99,17 +100,23 @@ public class ImageGenMapCommand implements CommandExecutor {
                           }
                           long duration = System.currentTimeMillis() - startTime;
                           MAP_IMAGE_SERVICE.createMapItems(player, finalWidth, finalHeight, tiles)
-                                  .whenComplete((items, storageError) -> CoreAI.getInstance().runMain(() -> {
-                                      if (!player.isOnline() || Bukkit.getPlayer(playerId) != player
-                                              || !SessionManager.SESSION_MANAGER.isCurrentAgent(playerId, agent)) {
-                                          return;
-                                      }
+                                  .whenComplete((batch, storageError) -> CoreAI.getInstance().runMain(() -> {
                                       if (storageError != null) {
-                                          CORE_AI_LOGGER.warning("Could not persist AI-generated map tiles.");
+                                          if (!player.isOnline() || Bukkit.getPlayer(playerId) != player
+                                                  || !SessionManager.SESSION_MANAGER.isCurrentAgent(playerId, agent)) {
+                                              return;
+                                          }
+                                          CORE_AI_LOGGER.log(Level.WARNING,
+                                                  "Could not persist AI-generated map tiles.", storageError);
                                           ChatMessages.send(player, ChatMessages.mapCreationFailure("The map data could not be saved."));
                                           return;
                                       }
-                                      MAP_IMAGE_SERVICE.giveMapItems(player, items);
+                                      if (!MAP_IMAGE_SERVICE.deliverIfCurrent(batch,
+                                              () -> player.isOnline() && Bukkit.getPlayer(playerId) == player
+                                                      && SessionManager.SESSION_MANAGER.isCurrentAgent(playerId, agent),
+                                              items -> MAP_IMAGE_SERVICE.giveMapItems(player, items))) {
+                                          return;
+                                      }
                                       ChatMessages.send(player, imageMapGeneratedFromAI(amount, duration));
                                   }));
                       });

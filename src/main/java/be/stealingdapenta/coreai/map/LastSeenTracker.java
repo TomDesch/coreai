@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -91,17 +92,20 @@ public enum LastSeenTracker {
         return result;
     }
 
-    public void markSeen(int mapId) {
+    public long markSeen(int mapId) {
         if (mapId < 0) {
-            return;
+            return 0L;
         }
-        long timestamp = System.currentTimeMillis();
         synchronized (lock) {
             Long previous = lastSeen.get(mapId);
+            long nextTimestamp = previous == null ? 1L
+                    : previous == Long.MAX_VALUE ? Long.MAX_VALUE : previous + 1L;
+            long timestamp = Math.max(System.currentTimeMillis(), nextTimestamp);
             if (previous == null || timestamp > previous) {
                 lastSeen.put(mapId, timestamp);
                 version++;
             }
+            return timestamp;
         }
     }
 
@@ -119,6 +123,35 @@ public enum LastSeenTracker {
             if (lastSeen.remove(mapId) != null) {
                 version++;
             }
+        }
+    }
+
+    public boolean forgetIfUnchanged(int mapId, long expectedTimestamp) {
+        synchronized (lock) {
+            if (Objects.equals(lastSeen.get(mapId), expectedTimestamp)) {
+                lastSeen.remove(mapId);
+                version++;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    public boolean deleteIfStale(int mapId, long now, long maxAgeMillis, StaleMapDeletion deletion)
+            throws IOException {
+        synchronized (lock) {
+            Long observedTimestamp = lastSeen.get(mapId);
+            if (observedTimestamp == null || !isStale(observedTimestamp, now, maxAgeMillis)) {
+                return false;
+            }
+            if (!deletion.delete()) {
+                return false;
+            }
+            if (Objects.equals(lastSeen.get(mapId), observedTimestamp)) {
+                lastSeen.remove(mapId);
+                version++;
+            }
+            return true;
         }
     }
 
@@ -160,5 +193,11 @@ public enum LastSeenTracker {
             });
             return write;
         }
+    }
+
+    @FunctionalInterface
+    public interface StaleMapDeletion {
+
+        boolean delete() throws IOException;
     }
 }

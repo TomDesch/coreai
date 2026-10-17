@@ -21,6 +21,7 @@ import be.stealingdapenta.coreai.service.SafeImageDownloader;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.UUID;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -118,16 +119,21 @@ public class ImageMapCommand implements CommandExecutor {
                               return;
                           }
                           MAP_IMAGE_SERVICE.createMapItems(player, finalWidth, finalHeight, tiles)
-                                  .whenComplete((items, storageError) -> CoreAI.getInstance().runMain(() -> {
-                                      if (!player.isOnline() || Bukkit.getPlayer(playerId) != player) {
-                                          return;
-                                      }
+                                  .whenComplete((batch, storageError) -> CoreAI.getInstance().runMain(() -> {
                                       if (storageError != null) {
-                                          CORE_AI_LOGGER.warning("Could not persist generated map tiles.");
+                                          if (!player.isOnline() || Bukkit.getPlayer(playerId) != player) {
+                                              return;
+                                          }
+                                          CORE_AI_LOGGER.log(Level.WARNING,
+                                                  "Could not persist generated map tiles.", storageError);
                                           ChatMessages.send(player, mapCreationFailure("The map data could not be saved."));
                                           return;
                                       }
-                                      MAP_IMAGE_SERVICE.giveMapItems(player, items);
+                                      if (!MAP_IMAGE_SERVICE.deliverIfCurrent(batch,
+                                              () -> player.isOnline() && Bukkit.getPlayer(playerId) == player,
+                                              items -> MAP_IMAGE_SERVICE.giveMapItems(player, items))) {
+                                          return;
+                                      }
                                       ChatMessages.send(player, imageMapCreated(finalWidth * finalHeight));
                                   }));
                       });

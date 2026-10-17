@@ -5,7 +5,11 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -79,7 +83,7 @@ public enum MapImageService {
         };
     }
 
-    public CompletableFuture<List<ItemStack>> createMapItems(Player player, int width, int height, BufferedImage[][] tiles) {
+    public CompletableFuture<MapItemBatch> createMapItems(Player player, int width, int height, BufferedImage[][] tiles) {
         if (!Bukkit.isPrimaryThread()) {
             throw new IllegalStateException("Map items must be allocated from the server thread.");
         }
@@ -88,22 +92,80 @@ public enum MapImageService {
             throw new IllegalArgumentException("Tile rows do not match the requested image grid.");
         }
         List<ItemStack> items = new ArrayList<>(grid.tileCount());
-        List<CompletableFuture<Void>> writes = new ArrayList<>(grid.tileCount());
-        for (int row = 0; row < grid.rows(); row++) {
-            if (tiles[row].length != grid.columns()) {
-                throw new IllegalArgumentException("Tile columns do not match the requested image grid.");
+        List<MapStorage.SaveHandle> saves = new ArrayList<>(grid.tileCount());
+        try {
+            for (int row = 0; row < grid.rows(); row++) {
+                if (tiles[row].length != grid.columns()) {
+                    throw new IllegalArgumentException("Tile columns do not match the requested image grid.");
+                }
+                for (int col = 0; col < grid.columns(); col++) {
+                    BufferedImage tile = tiles[row][col];
+                    MapView view = Bukkit.createMap(player.getWorld());
+                    view.getRenderers().clear();
+                    view.addRenderer(rendererFrom(tile));
+                    saves.add(MapStorage.MAP_STORAGE.saveNewMap(view, tile));
+                    items.add(createMapItem(view, row, col));
+                }
             }
-            for (int col = 0; col < grid.columns(); col++) {
-                BufferedImage tile = tiles[row][col];
-                MapView view = Bukkit.createMap(player.getWorld());
-                view.getRenderers().clear();
-                view.addRenderer(rendererFrom(tile));
-                writes.add(MapStorage.MAP_STORAGE.saveNewMap(view, tile));
-                items.add(createMapItem(view, row, col));
+        } catch (RuntimeException exception) {
+            return MapStorage.MAP_STORAGE.rollbackBatch(saves)
+                    .<MapItemBatch>handle((ignored, rollbackError) -> {
+                        if (rollbackError != null) {
+                            exception.addSuppressed(unwrap(rollbackError));
+                        }
+                        throw new CompletionException(exception);
+                    });
+        }
+        return completeBatch(saves, items);
+    }
+
+    static CompletableFuture<MapItemBatch> completeBatch(
+            List<MapStorage.SaveHandle> saves,
+            List<ItemStack> items) {
+        CompletableFuture<?>[] settledWrites = saves.stream()
+                .map(save -> save.write().handle((ignored, error) -> null))
+                .toArray(CompletableFuture[]::new);
+        return CompletableFuture.allOf(settledWrites).thenCompose(ignored -> {
+            Throwable writeFailure = findWriteFailure(saves);
+            if (writeFailure == null) {
+                return CompletableFuture.completedFuture(new MapItemBatch(items, saves));
+            }
+            return MapStorage.MAP_STORAGE.rollbackBatch(saves)
+                    .<MapItemBatch>handle((rolledBack, rollbackError) -> {
+                        if (rollbackError != null) {
+                            writeFailure.addSuppressed(unwrap(rollbackError));
+                        }
+                        throw new CompletionException(writeFailure);
+                    });
+        });
+    }
+
+    private static Throwable findWriteFailure(List<MapStorage.SaveHandle> saves) {
+        for (MapStorage.SaveHandle save : saves) {
+            if (save.write().isCompletedExceptionally()) {
+                try {
+                    save.write().join();
+                } catch (CompletionException | CancellationException exception) {
+                    return unwrap(exception);
+                }
             }
         }
-        return CompletableFuture.allOf(writes.toArray(CompletableFuture[]::new))
-                .thenApply(ignored -> List.copyOf(items));
+        return null;
+    }
+
+    private static Throwable unwrap(Throwable error) {
+        Throwable unwrapped = error;
+        while (unwrapped instanceof CompletionException && unwrapped.getCause() != null) {
+            unwrapped = unwrapped.getCause();
+        }
+        return unwrapped;
+    }
+
+    private static void logRollbackFailure(Throwable error) {
+        if (error != null) {
+            Bukkit.getLogger().warning("Could not fully roll back generated map images: "
+                    + unwrap(error).getMessage());
+        }
     }
 
     public void giveMapItems(Player player, List<ItemStack> items) {
@@ -115,6 +177,37 @@ public enum MapImageService {
             for (ItemStack leftover : leftovers.values()) {
                 player.getWorld().dropItemNaturally(player.getLocation(), leftover);
             }
+        }
+    }
+
+    public static boolean deliverIfCurrent(
+            MapItemBatch batch,
+            BooleanSupplier current,
+            Consumer<List<ItemStack>> delivery) {
+        if (!current.getAsBoolean()) {
+            batch.rollback().whenComplete((ignored, error) -> logRollbackFailure(error));
+            return false;
+        }
+        delivery.accept(batch.items());
+        return true;
+    }
+
+    public static final class MapItemBatch {
+
+        private final List<ItemStack> items;
+        private final List<MapStorage.SaveHandle> saves;
+
+        private MapItemBatch(List<ItemStack> items, List<MapStorage.SaveHandle> saves) {
+            this.items = List.copyOf(items);
+            this.saves = List.copyOf(saves);
+        }
+
+        public List<ItemStack> items() {
+            return items;
+        }
+
+        public CompletableFuture<Void> rollback() {
+            return MapStorage.MAP_STORAGE.rollbackBatch(saves);
         }
     }
 
