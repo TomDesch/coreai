@@ -1,142 +1,71 @@
 # CoreAI
 
-[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.4-blue)](https://papermc.io/)
-[![Java 21](https://img.shields.io/badge/Java-21-orange)](https://openjdk.java.net/projects/jdk/21/)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Discord-brightgreen?logo=discord)](https://discord.com/invite/Zgds9u353N)
+CoreAI adds AI chat, model selection, image-to-map rendering, and AI image
+generation to Minecraft servers. It supports **Spigot and Paper 26.3** and
+targets Java 21 bytecode. Minecraft 26.3 servers require Java 26; building has
+been verified with JDK 27.
 
-**CoreAI** is an extensible, AI-powered Minecraft toolkit built on Spigot/Paper – now with in-game **image generation**, **map rendering**, and automatic
-cleanup of unused assets.
+## Install
 
----
+1. Download the shaded `coreai-1.2.0.jar` from a release or build it as
+   described below.
+2. Place the JAR in the server's `plugins` directory and start the server.
+3. Configure an optional server-wide OpenAI API key in
+   `plugins/CoreAI/config.yml`, or let players set personal keys with
+   `/setapikey`.
 
-## 🚀 Features
+The configuration file is created on first start and is not overwritten on
+subsequent starts. Personal API keys are encrypted on disk. Back up the
+`plugins/CoreAI` data directory together with the server; losing its encryption
+key makes saved personal keys unavailable.
 
-- 💬 **Interactive Chat**  
-  Use `/chat <message>` to talk with ChatGPT using full per-player context.
-
-- 🔐 **Per-Player API Keys**  
-  Players can securely store OpenAI keys with `/setapikey` (AES-GCM encrypted).
-
-- 📦 **Model GUI**  
-  Use `/models` to open a GUI with all available models tied to your key.
-
-- 📄 **Model Info**  
-  Use `/modelinfo` to get full details about your active model.
-
-- 🖼️ **Image-to-Map Rendering**  
-  Use `/imagemap <url>` to convert any image into in-game maps (supports `WxH` tiling).
-
-- 🎨 **AI Image Generation**  
-  Use `/imagegenmap <prompt>` to generate a DALL·E image and get it as Minecraft maps.
-
-- 💾 **Map Persistence & Recovery**  
-  Generated map tiles are stored as `.png` files and restored after server restarts.
-
-- 🧹 **Automatic Cleanup**  
-  Unused images are cleaned up after a configurable number of days.
-  - Manual cleanup with `/cleanup`
-  - Tracks "last seen" map usage (inventory, item frames, ground, etc.)
-
----
-
-## 📋 Table of Contents
-1. [Installation](#installation)
-2. [Configuration](#configuration)
-3. [Usage](#usage)
-4. [Permissions](#permissions)
-5. [Development](#development)
-6. [Roadmap](#roadmap)
-7. [License](#license)
-
----
-
-## 🔧 Installation
-
-1. Drop `CoreAI.jar` into your server’s `plugins/` directory.
-2. Restart the server.
-3. Set an optional global API key in `config.yml` or let players use `/setapikey`.
-
----
-
-## ⚙️ Configuration
+## Configuration
 
 ```yaml
 openai:
-  api-key: ""                  # Optional: server-wide default key
-  model: "gpt-3.5-turbo"       # Default model to use
-  timeout-ms: 60000            # Max wait time for chat completions
-  timeout-image-ms: 300000     # Max wait time for image generation
+  api-key: ""            # Optional server-wide key
+  model: "gpt-6-astra"   # Default model; players can choose another with /models
+  timeout-ms: 60000      # Chat request timeout
+  timeout-image-ms: 300000 # Image-generation request timeout
 
 cleanup:
-  auto-enabled: true           # Enable automatic cleanup
-  max-age-days: 30             # Delete unused map images older than this
-````
-
----
-
-## 🛠️ Usage
-
-### Commands
-
-| Command                 | Description                                                     |
-|-------------------------|-----------------------------------------------------------------|
-| `/setapikey`            | Store your OpenAI key (AES-encrypted on disk)                   |
-| `/chat <message>`       | Chat with AI using your configured model and key                |
-| `/models`               | Choose an AI model using a GUI                                  |
-| `/modelinfo`            | View info about your current model                              |
-| `/imagemap <url>`       | Render an image from a URL into map tiles (supports WxH tiling) |
-| `/imagegenmap <prompt>` | Generate an AI image from a prompt and render it as a map grid  |
-| `/cleanup`              | Manually remove old unused image maps                           |
-
----
-
-## 🔐 Permissions
-
-```yaml
-coreai.setapikey:
-  default: true
-
-coreai.chat:
-  default: true
-
-coreai.models:
-  default: true
-
-coreai.modelinfo:
-  default: true
-
-coreai.imagemap:
-  default: true
-
-coreai.imagegenmap:
-  default: true
-
-coreai.cleanup:
-  default: op
+  auto-enabled: false    # Age-based cleanup is opt-in
+  max-age-days: 30
 ```
 
----
+Invalid or out-of-range settings are replaced with safe defaults in memory and
+reported in the server log. Automatic and manual cleanup are age-based: maps
+held in offline inventories or unloaded containers may not be observed, so
+keep cleanup disabled if those maps must be preserved.
 
-## 💡 Development
+## Commands and permissions
 
-Want to contribute? Fork this repo and open a PR!
+| Command | Description | Permission (default) |
+| --- | --- | --- |
+| `/chat <message>` | Send a message to the configured AI model. | `coreai.chat` (everyone) |
+| `/setapikey` | Start the private personal-key setup prompt. Enter the key in chat; do not put it in a command argument. | `coreai.setapikey` (everyone) |
+| `/models` | Fetch available models and open the model-selection menu. | `coreai.models` (everyone) |
+| `/modelinfo` | Show the active model and key status. | `coreai.modelinfo` (everyone) |
+| `/imagemap <url> [<columns>x<rows>]` | Download a public HTTP(S) image and create map tiles. | `coreai.imagemap` (everyone) |
+| `/imagegenmap <prompt> [<columns>x<rows>]` | Generate an image and create map tiles. | `coreai.imagegenmap` (everyone) |
+| `/cleanup confirm` | Remove old map images according to the configured age limit. | `coreai.cleanup` (operators) |
 
-* Java 21
-* PaperMC 1.21.4+
-* IntelliJ recommended
+Cancelled chat events can still be observed or logged by other server plugins;
+use a trusted server and review its chat-logging plugins before entering a
+personal key.
 
----
+## Build and test
 
-## 🔮 Roadmap ( ? )
+The Maven wrapper is included. With JDK 21 or newer:
 
-* 🤖 NPCs with AI-generated speech and personalities
-* 🎭 Integration with Citizens and Denizen
-* 💬 Support for audio (TTS via browser mod support)
+```powershell
+.\mvnw.cmd -B -ntp clean verify
+```
 
----
+The shaded plugin JAR is written to `target/coreai-1.2.0.jar`. The Spigot API
+is compile-time-only; Paper is not required to build the plugin. Runtime
+libraries are included and relocated in the shaded artifact.
 
-## 📄 License
+## License
 
-MIT © StealingDaPenta 2025
-
-> Join our [Discord](https://www.stealingdapenta.be) to give feedback, suggest features, or show off your creations!
+CoreAI is licensed under the MIT License. See [LICENSE](LICENSE).
