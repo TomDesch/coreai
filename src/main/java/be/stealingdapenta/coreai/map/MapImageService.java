@@ -33,8 +33,9 @@ public enum MapImageService {
      * Resizes an image to fit a specific grid of maps (columns × rows).
      */
     public BufferedImage resizeToGrid(BufferedImage image, int cols, int rows) {
-        int width = cols * MAP_WIDTH;
-        int height = rows * MAP_HEIGHT;
+        ImageGrid grid = new ImageGrid(cols, rows);
+        int width = Math.multiplyExact(grid.columns(), MAP_WIDTH);
+        int height = Math.multiplyExact(grid.rows(), MAP_HEIGHT);
 
         Image scaled = image.getScaledInstance(width, height, Image.SCALE_SMOOTH);
         BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
@@ -48,9 +49,10 @@ public enum MapImageService {
      * Splits an image into map-sized 128×128 tiles.
      */
     public BufferedImage[][] splitIntoTiles(BufferedImage largeImage, int columns, int rows) {
-        BufferedImage[][] tiles = new BufferedImage[rows][columns];
-        for (int row = 0; row < rows; row++) {
-            for (int col = 0; col < columns; col++) {
+        ImageGrid grid = new ImageGrid(columns, rows);
+        BufferedImage[][] tiles = new BufferedImage[grid.rows()][grid.columns()];
+        for (int row = 0; row < grid.rows(); row++) {
+            for (int col = 0; col < grid.columns(); col++) {
                 tiles[row][col] = largeImage.getSubimage(col * MAP_WIDTH, row * MAP_HEIGHT, MAP_WIDTH, MAP_HEIGHT);
             }
         }
@@ -103,8 +105,15 @@ public enum MapImageService {
      * Creates and adds a full grid of maps to the player's inventory.
      */
     public void addMapToInventory(Player player, int width, int height, BufferedImage[][] tiles) {
-        for (int row = 0; row < height; row++) {
-            for (int col = 0; col < width; col++) {
+        ImageGrid grid = new ImageGrid(width, height);
+        if (tiles.length != grid.rows()) {
+            throw new IllegalArgumentException("Tile rows do not match the requested image grid.");
+        }
+        for (int row = 0; row < grid.rows(); row++) {
+            if (tiles[row].length != grid.columns()) {
+                throw new IllegalArgumentException("Tile columns do not match the requested image grid.");
+            }
+            for (int col = 0; col < grid.columns(); col++) {
                 ItemStack mapItem = createMapItem(player, tiles[row][col], row, col);
                 Map<Integer, ItemStack> leftovers = player.getInventory()
                                                           .addItem(mapItem);

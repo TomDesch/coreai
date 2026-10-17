@@ -127,6 +127,7 @@
               <artifact>*:*</artifact>
               <excludes>
                 <exclude>META-INF/MANIFEST.MF</exclude>
+                <exclude>META-INF/versions/9/OSGI-INF/MANIFEST.MF</exclude>
                 <exclude>**/module-info.class</exclude>
               </excludes>
             </filter>
@@ -159,6 +160,10 @@
             <relocation>
               <pattern>org.jetbrains.annotations</pattern>
               <shadedPattern>be.stealingdapenta.coreai.internal.jetbrains.annotations</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.jspecify.annotations</pattern>
+              <shadedPattern>be.stealingdapenta.coreai.internal.jspecify.annotations</shadedPattern>
             </relocation>
             <relocation>
               <pattern>org.intellij.lang.annotations</pattern>

@@ -1,10 +1,10 @@
 package be.stealingdapenta.coreai.service;
 
-import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
 import static be.stealingdapenta.coreai.service.OpenAIApi.OPEN_AI_API;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -14,16 +14,23 @@ import java.util.Map;
  */
 public class ChatAgent {
 
+    private static final int MAX_HISTORY_MESSAGES = 20;
     private final Deque<Map<String, Object>> history = new ArrayDeque<>();
     private volatile String apiKey;
     private volatile String model;
     private final int timeoutMs;
     private final Object historyLock = new Object();
+    private final ChatTransport chatTransport;
 
     public ChatAgent(String apiKey, String model, int timeoutMs) {
+        this(apiKey, model, timeoutMs, OPEN_AI_API::chat);
+    }
+
+    ChatAgent(String apiKey, String model, int timeoutMs, ChatTransport chatTransport) {
         this.apiKey = apiKey;
         this.model = model;
         this.timeoutMs = timeoutMs;
+        this.chatTransport = chatTransport;
     }
 
     public void setModel(String model) {
@@ -58,13 +65,8 @@ public class ChatAgent {
      * @return List of model IDs
      * @throws OpenAiException if authentication or API errors occur
      */
-    public List<String> listModels() throws OpenAiException {
-        try {
-            return OPEN_AI_API.listModelIds(apiKey);
-        } catch (IOException e) {
-            CORE_AI_LOGGER.severe("Failed to fetch model list: " + e.getMessage());
-            throw new RuntimeException("Failed to fetch models", e);
-        }
+    public List<String> listModels() throws IOException {
+        return OPEN_AI_API.listModelIds(apiKey);
     }
 
     /**
@@ -76,20 +78,25 @@ public class ChatAgent {
      */
     public String chat(String prompt) throws IOException {
         synchronized (historyLock) {
-            history.addLast(Map.of("role", "user", "content", prompt));
-            List<Map<String, Object>> contextHistory = List.copyOf(history);
-            String reply;
-            try {
-                reply = OPEN_AI_API.chat(apiKey, model, timeoutMs, contextHistory);
-            } catch (IOException e) {
-                history.removeLast();
-                throw e;
+            List<Map<String, Object>> candidateHistory = new ArrayList<>(history);
+            candidateHistory.add(Map.of("role", "user", "content", prompt));
+            while (candidateHistory.size() > MAX_HISTORY_MESSAGES) {
+                candidateHistory.removeFirst();
+                candidateHistory.removeFirst();
             }
-            history.addLast(Map.of("role", "assistant", "content", reply));
-            while (history.size() > 20) {
-                history.removeFirst();
-                history.removeFirst();
+            String currentKey = apiKey;
+            String currentModel = model;
+            String reply = chatTransport.chat(currentKey, currentModel, timeoutMs, List.copyOf(candidateHistory));
+            if (reply == null || reply.isBlank()) {
+                throw new IOException("OpenAI returned an empty chat response.");
             }
+            candidateHistory.add(Map.of("role", "assistant", "content", reply));
+            while (candidateHistory.size() > MAX_HISTORY_MESSAGES) {
+                candidateHistory.removeFirst();
+                candidateHistory.removeFirst();
+            }
+            history.clear();
+            history.addAll(candidateHistory);
             return reply;
         }
     }
@@ -97,17 +104,18 @@ public class ChatAgent {
     @Override
     public String toString() {
         synchronized (historyLock) {
-            return "ChatAgent{historyEntries=" + history.size() + ", apiKey=" + redact(apiKey) + ", model='" + model + '\'' + ", timeoutMs=" + timeoutMs + '}';
+            return "ChatAgent{historyEntries=" + history.size() + ", apiKey=" + redact(apiKey)
+                    + ", model='" + model + '\'' + ", timeoutMs=" + timeoutMs + '}';
         }
     }
 
     private static String redact(String value) {
-        if (value == null || value.isBlank()) {
-            return "<unset>";
-        }
-        if (value.length() <= 4) {
-            return "****";
-        }
-        return value.substring(0, 4) + "...";
+        return value == null || value.isBlank() ? "<unset>" : "<set>";
+    }
+
+    @FunctionalInterface
+    interface ChatTransport {
+
+        String chat(String apiKey, String model, int timeoutMs, List<Map<String, Object>> messages) throws IOException;
     }
 }

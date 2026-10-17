@@ -4,6 +4,7 @@ import static be.stealingdapenta.coreai.util.ChatMessages.FETCHING_MODELS;
 import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_API_KEY_WITH_INSTRUCTIONS;
 import static be.stealingdapenta.coreai.util.ChatMessages.NO_PERMISSION;
 import static be.stealingdapenta.coreai.util.ChatMessages.PLAYERS_ONLY;
+import static be.stealingdapenta.coreai.util.ChatMessages.BUSY;
 
 import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.gui.ModelSelectorGUI;
@@ -55,43 +56,46 @@ public class ModelCommand implements CommandExecutor {
             return true;
         }
 
-        // Async: test API key then list models
-        Bukkit.getScheduler()
-              .runTaskAsynchronously(CoreAI.getInstance(), () -> {
-                  // 1) Validate key
+        boolean accepted = CoreAI.getInstance().submitAsync(() -> {
+                  if (!SessionManager.SESSION_MANAGER.isCurrentAgent(uuid, agent)) {
+                      return;
+                  }
                   try {
-                      agent.testKey();
+                      List<String> models = agent.listModels();
+                      CoreAI.getInstance().runMain(() -> {
+                          if (isCurrent(player, uuid, agent)) {
+                              gui.openModelGui(player, models);
+                          }
+                      });
                   } catch (OpenAiException oae) {
-                      Bukkit.getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> {
-                                if ("invalid_api_key" .equals(oae.getCode())) {
+                      CoreAI.getInstance().runMain(() -> {
+                          if (!isCurrent(player, uuid, agent)) {
+                              return;
+                          }
+                                if ("invalid_api_key".equals(oae.getCode())) {
                                     ChatMessages.send(player, INVALID_API_KEY_WITH_INSTRUCTIONS);
                                 } else {
                                     ChatMessages.send(player, ChatMessages.openAiError(oae));
                                 }
-                            });
+                      });
                       return;
                   } catch (IOException ioe) {
-                      Bukkit.getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> ChatMessages.send(player, ChatMessages.ioError(ioe)));
-                      return;
+                      CoreAI.getInstance().runMain(() -> {
+                          if (isCurrent(player, uuid, agent)) {
+                              ChatMessages.send(player, ChatMessages.ioError(ioe));
+                          }
+                      });
                   }
-
-                  // 2) Fetch model list
-                  List<String> models;
-                  try {
-                      models = agent.listModels();
-                  } catch (OpenAiException oae) {
-                      Bukkit.getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> ChatMessages.send(player, ChatMessages.openAiError(oae)));
-                      return;
-                  }
-
-                  // 3) Open GUI on the main thread
-                  Bukkit.getScheduler()
-                        .runTask(CoreAI.getInstance(), () -> gui.openModelGui(player, models));
               });
+        if (!accepted) {
+            ChatMessages.send(player, BUSY);
+        }
 
         return true;
+    }
+
+    private boolean isCurrent(Player player, UUID uuid, ChatAgent agent) {
+        return player.isOnline() && Bukkit.getPlayer(uuid) == player
+                && SessionManager.SESSION_MANAGER.isCurrentAgent(uuid, agent);
     }
 }

@@ -20,6 +20,7 @@ FORBIDDEN_PREFIXES = (
     "kotlin/",
     "org/jetbrains/",
     "org/intellij/",
+    "org/jspecify/",
 )
 REQUIRED_ENTRIES = (
     "plugin.yml",
@@ -34,6 +35,7 @@ RELOCATED_CLASSES = (
     RELOCATED_ROOT + "kyori/adventure/text/serializer/legacy/LegacyComponentSerializer.class",
     RELOCATED_ROOT + "okhttp3/OkHttpClient.class",
     RELOCATED_ROOT + "moshi/Moshi.class",
+    RELOCATED_ROOT + "jspecify/annotations/Nullable.class",
 )
 
 

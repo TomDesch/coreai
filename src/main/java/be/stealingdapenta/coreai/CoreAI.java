@@ -15,9 +15,11 @@ import be.stealingdapenta.coreai.command.ModelInfoCommand;
 import be.stealingdapenta.coreai.gui.ModelSelectorGUI;
 import be.stealingdapenta.coreai.listener.AsyncApiKeyListener;
 import be.stealingdapenta.coreai.listener.MapUsageTrackerListener;
+import be.stealingdapenta.coreai.service.BackgroundTaskService;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.logging.Logger;
+import java.util.concurrent.TimeUnit;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -35,6 +37,10 @@ public class CoreAI extends JavaPlugin {
     private static final String ANSI_RED = "\u001B[31m";
 
     private static CoreAI instance;
+    private BackgroundTaskService backgroundTasks;
+    private volatile boolean shuttingDown;
+    private static final int WORKER_THREADS = 4;
+    private static final int MAX_QUEUED_TASKS = 16;
 
     public static CoreAI getInstance() {
         return instance;
@@ -43,6 +49,8 @@ public class CoreAI extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
+        shuttingDown = false;
+        backgroundTasks = new BackgroundTaskService(WORKER_THREADS, MAX_QUEUED_TASKS);
 
         // Save the default config if missing
         saveDefaultConfig();
@@ -121,8 +129,27 @@ public class CoreAI extends JavaPlugin {
         }
     }
 
+    public boolean submitAsync(Runnable task) {
+        return !shuttingDown && backgroundTasks != null && backgroundTasks.submit(task);
+    }
+
+    public void runMain(Runnable task) {
+        if (shuttingDown) {
+            return;
+        }
+        Bukkit.getScheduler().runTask(this, () -> {
+            if (!shuttingDown) {
+                task.run();
+            }
+        });
+    }
+
     @Override
     public void onDisable() {
+        shuttingDown = true;
+        if (backgroundTasks != null) {
+            backgroundTasks.shutdown(5, TimeUnit.SECONDS);
+        }
         LAST_SEEN_TRACKER.save();
         CORE_AI_LOGGER.info(ANSI_RED + "CoreAI disabled." + ANSI_RESET);
     }

@@ -1,18 +1,16 @@
 package be.stealingdapenta.coreai.service;
 
-import static be.stealingdapenta.coreai.config.Config.TIMEOUT_IMAGE_MS;
-
 import com.squareup.moshi.JsonAdapter;
 import com.squareup.moshi.Moshi;
 import com.squareup.moshi.Types;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Base64;
 import java.util.concurrent.TimeUnit;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -42,12 +40,19 @@ public enum OpenAIApi {
     private static final String HTTP = "HTTP ";
     private static final String BASE_URL = "https://api.openai.com/v1";
     private static final String MODEL_INFO_PATH = "/models/%s";
+    private static final String IMAGE_MODEL = "gpt-image-2.5-flare";
+    private static final int MAX_IMAGE_RESPONSE_BYTES = SafeImageDownloader.MAX_DOWNLOAD_BYTES;
+    private static final int MAX_IMAGE_RESPONSE_JSON_BYTES = 12 * 1024 * 1024;
 
     private final OkHttpClient client;
     private final JsonAdapter<Map<String, Object>> mapAdapter;
 
     OpenAIApi() {
-        client = new OkHttpClient();
+        client = new OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .callTimeout(30, TimeUnit.SECONDS)
+                .build();
         Type mapType = Types.newParameterizedType(Map.class, String.class, Object.class);
         mapAdapter = new Moshi.Builder().build()
                                         .adapter(mapType);
@@ -72,9 +77,15 @@ public enum OpenAIApi {
                 throw parseOpenAiError(resp.code(), json);
             }
             List<Map<String, Object>> data = extractListFromJsonField(json, DATA);
-            return data.stream()
-                       .map(m -> String.valueOf(m.get(ID)))
-                       .toList();
+            List<String> modelIds = new ArrayList<>();
+            for (Map<String, Object> model : data) {
+                Object id = model.get(ID);
+                if (!(id instanceof String modelId) || modelId.isBlank()) {
+                    throw new IOException("OpenAI returned a model without a valid ID.");
+                }
+                modelIds.add(modelId);
+            }
+            return List.copyOf(modelIds);
         }
     }
 
@@ -213,15 +224,24 @@ public enum OpenAIApi {
             }
 
             // Parse the response
-            Deque<Map<String, Object>> dq = new LinkedList<>(extractListFromJsonField(respBody, CHOICES));
-            Map<String, Object> first = dq.getFirst();
-
-            @SuppressWarnings("unchecked") Map<String, Object> message = (Map<String, Object>) first.get(MESSAGE);
-
-            return message.get(CONTENT)
-                          .toString()
-                          .trim();
+            return parseChatResponse(respBody);
         }
+    }
+
+    String parseChatResponse(String json) throws IOException {
+        List<Map<String, Object>> choices = extractListFromJsonField(json, CHOICES);
+        if (choices.isEmpty()) {
+            throw new IOException("OpenAI returned no chat completion choices.");
+        }
+        Object messageValue = choices.getFirst().get(MESSAGE);
+        if (!(messageValue instanceof Map<?, ?> message)) {
+            throw new IOException("OpenAI returned a chat choice without a message.");
+        }
+        Object contentValue = message.get(CONTENT);
+        if (!(contentValue instanceof String content) || content.isBlank()) {
+            throw new IOException("OpenAI returned an empty or unsupported chat response.");
+        }
+        return content.trim();
     }
 
     /**
@@ -242,16 +262,12 @@ public enum OpenAIApi {
      * @throws IOException     On network or API failure.
      * @throws OpenAiException If OpenAI returns an error.
      */
-    public String generateImage(String prompt, int width, int height, String apiKey) throws IOException, OpenAiException {
-        // DALL·E only supports 256, 512, or 1024 square outputs
-        int size = Math.min(Math.max(Math.min(width, height), 256), 1024);
-        if (size <= 512) {
-            size = 512;
-        } else {
-            size = 1024;
-        }
-
-        Map<String, Object> payload = Map.of("prompt", prompt, "n", 1, "size", size + "x" + size, "response_format", "url");
+    public byte[] generateImage(String prompt, String apiKey, int timeoutMs) throws IOException, OpenAiException {
+        Map<String, Object> payload = Map.of(
+                "model", IMAGE_MODEL,
+                "prompt", prompt,
+                "n", 1,
+                "size", "1024x1024");
 
         String json = mapAdapter.toJson(payload);
         RequestBody body = RequestBody.create(json, MediaType.get(CONTENT_TYPE));
@@ -261,29 +277,47 @@ public enum OpenAIApi {
                                                .post(body)
                                                .build();
 
-        OkHttpClient timed = new OkHttpClient.Builder().connectTimeout(60, TimeUnit.SECONDS)
-                                                       .readTimeout(TIMEOUT_IMAGE_MS.get(), TimeUnit.MILLISECONDS)
-                                                       .writeTimeout(TIMEOUT_IMAGE_MS.get(), TimeUnit.MILLISECONDS)
-                                                       .callTimeout(TIMEOUT_IMAGE_MS.get(), TimeUnit.MILLISECONDS)
+        OkHttpClient timed = client.newBuilder()
+                                                       .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                                                       .writeTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                                                       .callTimeout(timeoutMs, TimeUnit.MILLISECONDS)
                                                        .build();
 
         try (Response response = timed.newCall(request)
                                       .execute()) {
-            String respBody = response.body() != null ? response.body()
-                                                                .string() : "";
             if (!response.isSuccessful()) {
+                String respBody = response.body() != null ? response.body().string() : "";
                 throwOpenAiError(response.code(), respBody);
             }
-
-            List<Map<String, Object>> data = extractListFromJsonField(respBody, DATA);
-            if (data.isEmpty() || !data.getFirst()
-                                       .containsKey("url")) {
-                throw new IOException("No image URL returned");
+            if (response.body() == null) {
+                throw new IOException("OpenAI returned an empty image response.");
             }
-            return data.getFirst()
-                       .get("url")
-                       .toString();
+            byte[] jsonBytes = SafeImageDownloader.readLimited(response.body().byteStream(), MAX_IMAGE_RESPONSE_JSON_BYTES);
+            return parseGeneratedImage(jsonBytes);
         }
+    }
+
+    byte[] parseGeneratedImage(byte[] jsonBytes) throws IOException {
+        String json = new String(jsonBytes, StandardCharsets.UTF_8);
+        List<Map<String, Object>> data = extractListFromJsonField(json, DATA);
+        if (data.isEmpty()) {
+            throw new IOException("OpenAI returned no generated image.");
+        }
+        Object encodedValue = data.getFirst().get("b64_json");
+        if (!(encodedValue instanceof String encoded) || encoded.isBlank()
+                || encoded.length() > ((MAX_IMAGE_RESPONSE_BYTES + 2L) / 3L) * 4L) {
+            throw new IOException("OpenAI returned an invalid generated image.");
+        }
+        byte[] image;
+        try {
+            image = Base64.getDecoder().decode(encoded);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("OpenAI returned an invalid generated image.", exception);
+        }
+        if (image.length == 0 || image.length > MAX_IMAGE_RESPONSE_BYTES) {
+            throw new IOException("OpenAI returned an image that exceeds the supported size.");
+        }
+        return image;
     }
 
 }

@@ -133,6 +133,10 @@ public enum SessionManager implements Listener {
         });
     }
 
+    public boolean isCurrentAgent(UUID uuid, ChatAgent agent) {
+        return agents.get(uuid) == agent;
+    }
+
     /**
      * Persists the selected model for a player.
      *

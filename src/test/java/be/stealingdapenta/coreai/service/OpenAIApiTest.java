@@ -2,7 +2,12 @@ package be.stealingdapenta.coreai.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import org.junit.jupiter.api.Test;
 
 class OpenAIApiTest {
@@ -34,5 +39,39 @@ class OpenAIApiTest {
         assertEquals(429, exception.getStatus());
         assertEquals("unknown_error", exception.getCode());
         assertEquals("OpenAI request failed", exception.getMessage());
+    }
+
+    @Test
+    void rejectsEmptyAndMalformedChatCompletions() {
+        assertThrows(IOException.class, () -> OpenAIApi.OPEN_AI_API.parseChatResponse("{\"choices\":[]}"));
+        assertThrows(IOException.class, () -> OpenAIApi.OPEN_AI_API.parseChatResponse("{\"choices\":[{}]}"));
+        assertThrows(IOException.class, () -> OpenAIApi.OPEN_AI_API.parseChatResponse(
+                "{\"choices\":[{\"message\":{\"content\":null}}]}"));
+        assertThrows(IOException.class, () -> OpenAIApi.OPEN_AI_API.parseChatResponse(
+                "{\"choices\":[{\"message\":{\"content\":\" \"}}]}"));
+    }
+
+    @Test
+    void returnsTextFromValidChatCompletion() throws IOException {
+        String result = OpenAIApi.OPEN_AI_API.parseChatResponse(
+                "{\"choices\":[{\"message\":{\"content\":\"  hello  \"}}]}");
+
+        assertEquals("hello", result);
+    }
+
+    @Test
+    void decodesCurrentImageGenerationResponse() throws IOException {
+        byte[] image = OpenAIApi.OPEN_AI_API.parseGeneratedImage(
+                ("{\"data\":[{\"b64_json\":\"" + Base64.getEncoder().encodeToString("png".getBytes(StandardCharsets.UTF_8))
+                        + "\"}]}")
+                        .getBytes(StandardCharsets.UTF_8));
+
+        assertArrayEquals("png".getBytes(StandardCharsets.UTF_8), image);
+    }
+
+    @Test
+    void rejectsImageGenerationResponsesWithoutBase64Image() {
+        assertThrows(IOException.class, () -> OpenAIApi.OPEN_AI_API.parseGeneratedImage(
+                "{\"data\":[{\"url\":\"https://example.com/image.png\"}]}".getBytes(StandardCharsets.UTF_8)));
     }
 }

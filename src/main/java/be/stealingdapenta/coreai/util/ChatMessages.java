@@ -41,6 +41,10 @@ public final class ChatMessages {
                                                                          .coreAIPrefix()
                                                                          .append("Error: This command can only be used by players.", RED)
                                                                          .build();
+    public static final Component BUSY = TextBuilder.TEXT_BUILDER.reset()
+                                                                 .coreAIPrefix()
+                                                                 .append("The service is busy. Please try again shortly.", RED)
+                                                                 .build();
     public static final Component API_KEY_STORED = TextBuilder.TEXT_BUILDER.reset()
                                                                            .coreAIPrefix()
                                                                            .append("Your API key has been securely stored!", AQUA)

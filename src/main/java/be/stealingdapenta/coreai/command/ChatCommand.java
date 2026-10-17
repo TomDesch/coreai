@@ -8,6 +8,7 @@ import static be.stealingdapenta.coreai.util.ChatMessages.NO_PERMISSION;
 import static be.stealingdapenta.coreai.util.ChatMessages.PLAYERS_ONLY;
 import static be.stealingdapenta.coreai.util.ChatMessages.chatPrompt;
 import static be.stealingdapenta.coreai.util.ChatMessages.chatResponse;
+import static be.stealingdapenta.coreai.util.ChatMessages.BUSY;
 
 import be.stealingdapenta.coreai.CoreAI;
 import be.stealingdapenta.coreai.permission.PermissionNode;
@@ -19,6 +20,7 @@ import java.util.UUID;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
@@ -42,41 +44,48 @@ public class ChatCommand implements CommandExecutor {
         ChatMessages.send(player, chatPrompt(player, prompt));
         ChatMessages.send(player, MODEL_IS_THINKING);
         UUID uuid = player.getUniqueId();
+        ChatAgent agent = SESSION_MANAGER.getAgent(uuid);
 
-        // Run the chat in an async task
-        CoreAI.getInstance()
-              .getServer()
-              .getScheduler()
-              .runTaskAsynchronously(CoreAI.getInstance(), () -> {
-                  ChatAgent agent = SESSION_MANAGER.getAgent(uuid);
+        boolean accepted = CoreAI.getInstance().submitAsync(() -> {
+                  if (!SESSION_MANAGER.isCurrentAgent(uuid, agent)) {
+                      return;
+                  }
                   try {
                       String response = agent.chat(prompt);
-                      // deliver response on the main thread
-                      CoreAI.getInstance()
-                            .getServer()
-                            .getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> ChatMessages.send(player, chatResponse(response)));
+                      CoreAI.getInstance().runMain(() -> {
+                          if (isCurrent(player, uuid, agent)) {
+                              ChatMessages.send(player, chatResponse(response));
+                          }
+                      });
                   } catch (OpenAiException oae) {
-                      CoreAI.getInstance()
-                            .getServer()
-                            .getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> {
+                      CoreAI.getInstance().runMain(() -> {
+                          if (!isCurrent(player, uuid, agent)) {
+                              return;
+                          }
                                 switch (oae.getCode()) {
                                     case "invalid_api_key" -> ChatMessages.send(player, INVALID_API_KEY_WITH_INSTRUCTIONS);
                                     case "model_not_found" -> ChatMessages.send(player, MODEL_NOT_FOUND);
 
                                     default -> ChatMessages.send(player, ChatMessages.openAiError(oae));
                                 }
-                            });
+                      });
                   } catch (IOException ioe) {
-                      // generic network/parsing error -> also on the main thread
-                      CoreAI.getInstance()
-                            .getServer()
-                            .getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> ChatMessages.send(player, ChatMessages.ioError(ioe)));
+                      CoreAI.getInstance().runMain(() -> {
+                          if (isCurrent(player, uuid, agent)) {
+                              ChatMessages.send(player, ChatMessages.ioError(ioe));
+                          }
+                      });
                   }
               });
+        if (!accepted) {
+            ChatMessages.send(player, BUSY);
+        }
 
         return true;
+    }
+
+    private boolean isCurrent(Player player, UUID uuid, ChatAgent agent) {
+        return player.isOnline() && Bukkit.getPlayer(uuid) == player
+                && SESSION_MANAGER.isCurrentAgent(uuid, agent);
     }
 }

@@ -10,14 +10,17 @@ import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_DIMENSIONS;
 import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_SIZE_NUMBER;
 import static be.stealingdapenta.coreai.util.ChatMessages.NO_PERMISSION;
 import static be.stealingdapenta.coreai.util.ChatMessages.PLAYERS_ONLY;
+import static be.stealingdapenta.coreai.util.ChatMessages.BUSY;
 import static be.stealingdapenta.coreai.util.ChatMessages.imageMapCreated;
 import static be.stealingdapenta.coreai.util.ChatMessages.mapCreationFailure;
 import static be.stealingdapenta.coreai.util.ChatMessages.usageImageMapCommand;
 
 import be.stealingdapenta.coreai.CoreAI;
+import be.stealingdapenta.coreai.map.ImageGrid;
+import be.stealingdapenta.coreai.service.SafeImageDownloader;
 import java.awt.image.BufferedImage;
-import java.util.Arrays;
-import javax.imageio.ImageIO;
+import java.io.IOException;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -29,13 +32,11 @@ public class ImageMapCommand implements CommandExecutor {
 
     static final class ParsedImageRequest {
         final String url;
-        final int width;
-        final int height;
+        final ImageGrid grid;
 
-        ParsedImageRequest(String url, int width, int height) {
+        ParsedImageRequest(String url, ImageGrid grid) {
             this.url = url;
-            this.width = width;
-            this.height = height;
+            this.grid = grid;
         }
     }
 
@@ -45,29 +46,29 @@ public class ImageMapCommand implements CommandExecutor {
         }
 
         String url;
-        int width = 1;
-        int height = 1;
-
+        ImageGrid grid = new ImageGrid(1, 1);
         if (args.length == 2) {
-            String[] dims = args[0].toLowerCase()
-                                   .split("x");
-            if (dims.length != 2) {
-               return null;
-            }
-
             try {
-               width = Integer.parseInt(dims[0]);
-               height = Integer.parseInt(dims[1]);
-            } catch (NumberFormatException e) {
-               return null;
+                if (args[0].matches("(?i)\\d+x\\d+")) {
+                    grid = ImageGrid.parse(args[0]);
+                    url = args[1];
+                } else {
+                    grid = ImageGrid.parse(args[1]);
+                    url = args[0];
+                }
+            } catch (IllegalArgumentException exception) {
+                return null;
             }
-
-            url = args[1];
         } else {
             url = args[0];
         }
 
-        return new ParsedImageRequest(url, width, height);
+        try {
+            SafeImageDownloader.validateSource(url);
+        } catch (IOException exception) {
+            return null;
+        }
+        return new ParsedImageRequest(url, grid);
     }
 
     @Override
@@ -100,34 +101,38 @@ public class ImageMapCommand implements CommandExecutor {
 
         ChatMessages.send(player, DOWNLOADING_IMAGE);
 
-        final int finalWidth = request.width;
-        final int finalHeight = request.height;
+        final int finalWidth = request.grid.columns();
+        final int finalHeight = request.grid.rows();
         final String url = request.url;
+        final UUID playerId = player.getUniqueId();
 
-        Bukkit.getScheduler()
-              .runTaskAsynchronously(CoreAI.getInstance(), () -> {
+        boolean accepted = CoreAI.getInstance().submitAsync(() -> {
                   try {
-                      BufferedImage img = ImageIO.read(java.net.URI.create(url)
-                                                                   .toURL());
-                      if (img == null) {
-                          throw new IllegalArgumentException("Invalid image format or unreachable URL.");
-                      }
+                      BufferedImage img = SafeImageDownloader.download(url);
 
                       BufferedImage gridImage = MAP_IMAGE_SERVICE.resizeToGrid(img, finalWidth, finalHeight);
                       BufferedImage[][] tiles = MAP_IMAGE_SERVICE.splitIntoTiles(gridImage, finalWidth, finalHeight);
 
-                      Bukkit.getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> {
+                      CoreAI.getInstance().runMain(() -> {
+                          if (!player.isOnline() || Bukkit.getPlayer(playerId) != player) {
+                              return;
+                          }
                                 MAP_IMAGE_SERVICE.addMapToInventory(player, finalWidth, finalHeight, tiles);
 
                                 ChatMessages.send(player, imageMapCreated((finalWidth * finalHeight)));
                             });
                   } catch (Exception e) {
                       CORE_AI_LOGGER.warning("Failed to process image map: " + e.getMessage());
-                      CORE_AI_LOGGER.warning(Arrays.toString(e.getStackTrace()));
-                      ChatMessages.send(player, mapCreationFailure(e.getMessage()));
+                      CoreAI.getInstance().runMain(() -> {
+                          if (player.isOnline() && Bukkit.getPlayer(playerId) == player) {
+                              ChatMessages.send(player, mapCreationFailure("The image could not be processed."));
+                          }
+                      });
                   }
               });
+        if (!accepted) {
+            ChatMessages.send(player, BUSY);
+        }
 
         return true;
     }

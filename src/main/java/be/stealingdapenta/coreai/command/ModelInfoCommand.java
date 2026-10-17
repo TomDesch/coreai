@@ -5,6 +5,7 @@ import static be.stealingdapenta.coreai.service.OpenAIApi.OPEN_AI_API;
 import static be.stealingdapenta.coreai.util.ChatMessages.INVALID_API_KEY_WITH_INSTRUCTIONS;
 import static be.stealingdapenta.coreai.util.ChatMessages.NO_PERMISSION;
 import static be.stealingdapenta.coreai.util.ChatMessages.PLAYERS_ONLY;
+import static be.stealingdapenta.coreai.util.ChatMessages.BUSY;
 import static be.stealingdapenta.coreai.util.ChatMessages.fetchingModelInfo;
 import static be.stealingdapenta.coreai.util.ChatMessages.ioError;
 import static be.stealingdapenta.coreai.util.ChatMessages.modelInfo;
@@ -38,7 +39,7 @@ public class ModelInfoCommand implements CommandExecutor {
             ChatMessages.send(sender, PLAYERS_ONLY);
             return true;
         }
-        if (!player.hasPermission(PermissionNode.MODELS.node())) {
+        if (!player.hasPermission(PermissionNode.MODEL_INFO.node())) {
             ChatMessages.send(player, NO_PERMISSION);
             return true;
         }
@@ -56,31 +57,46 @@ public class ModelInfoCommand implements CommandExecutor {
         ChatMessages.send(player, fetchingModelInfo(modelId));
 
         // Async fetch model info
-        Bukkit.getScheduler()
-              .runTaskAsynchronously(CoreAI.getInstance(), () -> {
+        boolean accepted = CoreAI.getInstance().submitAsync(() -> {
+                  if (!SESSION_MANAGER.isCurrentAgent(uuid, agent)) {
+                      return;
+                  }
                   try {
                       Map<String, Object> info = OPEN_AI_API.getModelInfo(apiKey, modelId);
-                      // On success, display all fields
-                      Bukkit.getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> {
+                      CoreAI.getInstance().runMain(() -> {
+                          if (!isCurrent(player, uuid, agent)) {
+                              return;
+                          }
                                 ChatMessages.send(player, modelInfo(modelId));
                                 info.forEach((key, value) -> {
                                     ChatMessages.send(player, Component.text(key + ": " + value, AQUA));
                                 });
                             });
                   } catch (OpenAiException oae) {
-                      Bukkit.getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> {
+                      CoreAI.getInstance().runMain(() -> {
+                          if (!isCurrent(player, uuid, agent)) {
+                              return;
+                          }
                                 ChatMessages.send(player, openAiError(oae));
                             });
                   } catch (IOException ioe) {
-                      Bukkit.getScheduler()
-                            .runTask(CoreAI.getInstance(), () -> {
+                      CoreAI.getInstance().runMain(() -> {
+                          if (!isCurrent(player, uuid, agent)) {
+                              return;
+                          }
                                 ChatMessages.send(player, ioError(ioe));
                             });
                   }
               });
+        if (!accepted) {
+            ChatMessages.send(player, BUSY);
+        }
 
         return true;
+    }
+
+    private boolean isCurrent(Player player, UUID uuid, ChatAgent agent) {
+        return player.isOnline() && Bukkit.getPlayer(uuid) == player
+                && SESSION_MANAGER.isCurrentAgent(uuid, agent);
     }
 }
