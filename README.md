@@ -1,9 +1,10 @@
 # CoreAI
 
 CoreAI adds AI chat, model selection, image-to-map rendering, and AI image
-generation to Minecraft servers. It supports **Spigot and Paper 26.3** and
-targets Java 21 bytecode. Minecraft 26.3 servers require Java 26; building has
-been verified with JDK 27.
+generation to Minecraft servers. It supports Spigot and Paper 26.3 and targets
+Java 21 bytecode. Java 25 or newer is recommended for Paper; Java 26 has been
+verified as the runtime for both Paper and Spigot 26.3. Building has been
+verified with JDK 27.
 
 ## Install
 
@@ -34,21 +35,23 @@ cleanup:
 ```
 
 Invalid or out-of-range settings are replaced with safe defaults in memory and
-reported in the server log. Automatic and manual cleanup are age-based: maps
-held in offline inventories or unloaded containers may not be observed, so
-keep cleanup disabled if those maps must be preserved.
+reported in the server log. Age-based cleanup tracks maps in online player
+inventories and ender chests, item frames, dropped items, and loaded
+containers, including maps nested in shulker boxes and bundles. Maps kept only
+in offline inventories or unloaded chunks cannot be observed while absent. If
+those maps must be preserved, keep cleanup disabled.
 
 ## Commands and permissions
 
-| Command | Description | Permission (default) |
-| --- | --- | --- |
-| `/chat <message>` | Send a message to the configured AI model. | `coreai.chat` (everyone) |
-| `/setapikey` | Start the private personal-key setup prompt. Enter the key in chat; do not put it in a command argument. | `coreai.setapikey` (everyone) |
-| `/models` | Fetch available models and open the model-selection menu. | `coreai.models` (everyone) |
-| `/modelinfo` | Show the active model and key status. | `coreai.modelinfo` (everyone) |
-| `/imagemap <url> [<columns>x<rows>]` | Download a public HTTP(S) image and create map tiles. | `coreai.imagemap` (everyone) |
-| `/imagegenmap <prompt> [<columns>x<rows>]` | Generate an image and create map tiles. | `coreai.imagegenmap` (everyone) |
-| `/cleanup confirm` | Remove old map images according to the configured age limit. | `coreai.cleanup` (operators) |
+| Command                                    | Description                                                                                              | Permission (default)            |
+|--------------------------------------------|----------------------------------------------------------------------------------------------------------|---------------------------------|
+| `/chat <message>`                          | Send a message to the configured AI model.                                                               | `coreai.chat` (everyone)        |
+| `/setapikey`                               | Start the private personal-key setup prompt. Enter the key in chat; do not put it in a command argument. | `coreai.setapikey` (everyone)   |
+| `/models`                                  | Fetch available models and open the model-selection menu.                                                | `coreai.models` (everyone)      |
+| `/modelinfo`                               | Show the active model and key status.                                                                    | `coreai.modelinfo` (everyone)   |
+| `/imagemap <url> [<columns>x<rows>]`       | Download a public HTTP(S) image and create map tiles.                                                    | `coreai.imagemap` (everyone)    |
+| `/imagegenmap <prompt> [<columns>x<rows>]` | Generate an image and create map tiles.                                                                  | `coreai.imagegenmap` (everyone) |
+| `/cleanup confirm`                         | Remove old map images according to the configured age limit.                                             | `coreai.cleanup` (operators)    |
 
 Cancelled chat events can still be observed or logged by other server plugins;
 use a trusted server and review its chat-logging plugins before entering a
@@ -56,10 +59,11 @@ personal key.
 
 ## Build and test
 
-The Maven wrapper is included. With JDK 21 or newer:
+The Maven wrapper is included. Building has been verified with JDK 27:
 
 ```powershell
 .\mvnw.cmd -B -ntp clean verify
+python .github/scripts/verify_artifact.py
 ```
 
 The shaded plugin JAR is written to `target/coreai-1.2.0.jar`. The Spigot API
