@@ -5,7 +5,7 @@ openai:
   api-key: ""
 
   # Default model to use for chat requests.
-  model: "gpt-3.5-turbo"
+  model: "gpt-6-astra"
 
   # Timeout for chat completions (in milliseconds).
   timeout-ms: 60000  # 60,000 ms = 1 minute
@@ -15,7 +15,7 @@ openai:
 
 cleanup:
   # Enable automatic cleanup of old custom image maps.
-  auto-enabled: true
+  auto-enabled: false
 
   # Maximum age (in days) before a map image is considered unused and deleted.
   max-age-days: 30

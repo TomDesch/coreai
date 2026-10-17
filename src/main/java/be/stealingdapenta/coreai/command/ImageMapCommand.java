@@ -117,10 +117,20 @@ public class ImageMapCommand implements CommandExecutor {
                           if (!player.isOnline() || Bukkit.getPlayer(playerId) != player) {
                               return;
                           }
-                                MAP_IMAGE_SERVICE.addMapToInventory(player, finalWidth, finalHeight, tiles);
-
-                                ChatMessages.send(player, imageMapCreated((finalWidth * finalHeight)));
-                            });
+                          MAP_IMAGE_SERVICE.createMapItems(player, finalWidth, finalHeight, tiles)
+                                  .whenComplete((items, storageError) -> CoreAI.getInstance().runMain(() -> {
+                                      if (!player.isOnline() || Bukkit.getPlayer(playerId) != player) {
+                                          return;
+                                      }
+                                      if (storageError != null) {
+                                          CORE_AI_LOGGER.warning("Could not persist generated map tiles.");
+                                          ChatMessages.send(player, mapCreationFailure("The map data could not be saved."));
+                                          return;
+                                      }
+                                      MAP_IMAGE_SERVICE.giveMapItems(player, items);
+                                      ChatMessages.send(player, imageMapCreated(finalWidth * finalHeight));
+                                  }));
+                      });
                   } catch (Exception e) {
                       CORE_AI_LOGGER.warning("Failed to process image map: " + e.getMessage());
                       CoreAI.getInstance().runMain(() -> {

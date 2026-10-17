@@ -1,9 +1,5 @@
 package be.stealingdapenta.coreai;
 
-import static be.stealingdapenta.coreai.config.Config.API_KEY;
-import static be.stealingdapenta.coreai.config.Config.AUTO_CLEANUP_ENABLED;
-import static be.stealingdapenta.coreai.config.Config.MODEL;
-import static be.stealingdapenta.coreai.config.Config.TIMEOUT_MS;
 import static be.stealingdapenta.coreai.manager.SessionManager.SESSION_MANAGER;
 import static be.stealingdapenta.coreai.map.LastSeenTracker.LAST_SEEN_TRACKER;
 import static be.stealingdapenta.coreai.map.MapStorage.MAP_STORAGE;
@@ -15,6 +11,7 @@ import be.stealingdapenta.coreai.command.ImageMapCommand;
 import be.stealingdapenta.coreai.command.ModelCommand;
 import be.stealingdapenta.coreai.command.ModelInfoCommand;
 import be.stealingdapenta.coreai.command.SetApiKeyCommand;
+import be.stealingdapenta.coreai.config.ConfigSnapshot;
 import be.stealingdapenta.coreai.gui.ModelSelectorGUI;
 import be.stealingdapenta.coreai.listener.AsyncApiKeyListener;
 import be.stealingdapenta.coreai.listener.MapUsageTrackerListener;
@@ -25,6 +22,7 @@ import java.util.Objects;
 import java.util.logging.Logger;
 import java.util.concurrent.TimeUnit;
 import org.bukkit.Bukkit;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -45,6 +43,9 @@ public class CoreAI extends JavaPlugin {
     private PersistenceService persistence;
     private AsyncApiKeyListener apiKeyListener;
     private ModelSelectorGUI modelSelectorGUI;
+    private MapUsageTrackerListener mapUsageTracker;
+    private ConfigSnapshot configSnapshot;
+    private BukkitTask persistenceRetryTask;
     private volatile boolean shuttingDown;
     private static final int WORKER_THREADS = 4;
     private static final int MAX_QUEUED_TASKS = 16;
@@ -65,6 +66,7 @@ public class CoreAI extends JavaPlugin {
         CORE_AI_LOGGER = this.getLogger();
         CORE_AI_LOGGER.info(ANSI_YELLOW + "Enabling CoreAI" + ANSI_RESET);
 
+        configSnapshot = ConfigSnapshot.load(getConfig(), CORE_AI_LOGGER);
         validateDefaultAPIKey();
 
         apiKeyListener = new AsyncApiKeyListener();
@@ -74,7 +76,9 @@ public class CoreAI extends JavaPlugin {
 
         Path dataDirectory = getDataFolder().toPath();
         SESSION_MANAGER.initialize(dataDirectory, persistence, CORE_AI_LOGGER,
-                API_KEY.get(), MODEL.get(), TIMEOUT_MS.get())
+                configSnapshot.apiKey(), configSnapshot.model(), configSnapshot.timeoutMs())
+                .thenCompose(ignored -> LAST_SEEN_TRACKER.loadAsync(dataDirectory, persistence, CORE_AI_LOGGER))
+                .thenCompose(ignored -> MAP_STORAGE.initializeAsync(dataDirectory, persistence, CORE_AI_LOGGER))
                 .whenComplete((ignored, error) -> runMain(() -> {
                     if (error != null) {
                         CORE_AI_LOGGER.severe("Failed to load CoreAI player data. Plugin startup has been stopped to protect stored credentials.");
@@ -87,19 +91,19 @@ public class CoreAI extends JavaPlugin {
 
     private void finishInitialization() {
         getServer().getPluginManager().registerEvents(SESSION_MANAGER, this);
-        getServer().getPluginManager().registerEvents(new MapUsageTrackerListener(), this);
-
-        LAST_SEEN_TRACKER.load();
-        MAP_STORAGE.initialize();
-        Bukkit.getScheduler().runTask(this, () -> {
-            try {
-                MAP_STORAGE.restoreAllMapRenderers();
+        persistenceRetryTask = Bukkit.getScheduler().runTaskTimer(this,
+                () -> SESSION_MANAGER.retryPendingWrites(), 1_200L, 1_200L);
+        mapUsageTracker = new MapUsageTrackerListener(this);
+        getServer().getPluginManager().registerEvents(mapUsageTracker, this);
+        mapUsageTracker.start().whenComplete((ignored, error) -> {
+            if (error == null) {
                 runAutoMapCleaner();
-                CORE_AI_LOGGER.info("Restored all map renderers.");
-            } catch (Exception exception) {
-                CORE_AI_LOGGER.severe("Failed to initialize map storage: " + exception.getMessage());
+            } else {
+                CORE_AI_LOGGER.warning("Initial map usage scan did not finish; automatic cleanup was skipped.");
             }
         });
+
+        CORE_AI_LOGGER.info("Loaded stored map images; active map renderers will be restored as maps are observed.");
 
         Objects.requireNonNull(getCommand("setapikey")).setExecutor(new SetApiKeyCommand(apiKeyListener));
         Objects.requireNonNull(getCommand("chat")).setExecutor(new ChatCommand());
@@ -107,14 +111,13 @@ public class CoreAI extends JavaPlugin {
         Objects.requireNonNull(getCommand("modelinfo")).setExecutor(new ModelInfoCommand());
         Objects.requireNonNull(getCommand("imagemap")).setExecutor(new ImageMapCommand());
         Objects.requireNonNull(getCommand("imagegenmap")).setExecutor(new ImageGenMapCommand());
-        Objects.requireNonNull(getCommand("cleanup")).setExecutor(new ImageCleanupCommand());
+        Objects.requireNonNull(getCommand("cleanup")).setExecutor(new ImageCleanupCommand(mapUsageTracker));
 
         CORE_AI_LOGGER.info(ANSI_GREEN + "CoreAI ready to roll!" + ANSI_RESET);
     }
 
     private void validateDefaultAPIKey() {
-        if (API_KEY.get()
-                   .isEmpty()) {
+        if (configSnapshot.apiKey().isEmpty()) {
             CORE_AI_LOGGER.info(ANSI_RED + "No OpenAI API key set! Please fill openai.api-key in config.yml, or have players specify them individually!" + ANSI_RESET);
         }
     }
@@ -123,9 +126,20 @@ public class CoreAI extends JavaPlugin {
      * Triggered on launch. If auto cleanup is enabled, schedule a task to clean up unused images after a delay.
      */
     private void runAutoMapCleaner() {
-        if (AUTO_CLEANUP_ENABLED.get()) {
+        if (configSnapshot.autoCleanupEnabled()) {
+            CORE_AI_LOGGER.warning("Automatic cleanup is enabled. Age-based cleanup can include maps in offline inventories or unloaded containers.");
             getServer().getScheduler()
-                       .runTaskLater(this, MAP_STORAGE::cleanUpUnusedImages, 60L); // 3 seconds after startup
+                       .runTaskLater(this, () ->
+                               mapUsageTracker.refreshLoadedUsage()
+                                       .thenCompose(ignored -> MAP_STORAGE.cleanUpUnusedImages())
+                                       .whenComplete((count, error) -> {
+                                           if (error != null) {
+                                               CORE_AI_LOGGER.warning("Automatic map cleanup could not finish.");
+                                           } else {
+                                               CORE_AI_LOGGER.info("Automatic map cleanup removed "
+                                                       + count + " stale map image file(s).");
+                                           }
+                                       }), 60L);
         }
     }
 
@@ -148,6 +162,10 @@ public class CoreAI extends JavaPlugin {
         return persistence;
     }
 
+    public ConfigSnapshot getConfigSnapshot() {
+        return configSnapshot;
+    }
+
     public boolean isShuttingDown() {
         return shuttingDown;
     }
@@ -161,11 +179,17 @@ public class CoreAI extends JavaPlugin {
         if (apiKeyListener != null) {
             apiKeyListener.clearPendingInputs();
         }
+        if (persistenceRetryTask != null) {
+            persistenceRetryTask.cancel();
+        }
         if (SESSION_MANAGER.isInitialized()) {
             SESSION_MANAGER.retryPendingWrites();
             SESSION_MANAGER.clearAgents();
         }
-        LAST_SEEN_TRACKER.save();
+        if (mapUsageTracker != null) {
+            mapUsageTracker.stop();
+        }
+        LAST_SEEN_TRACKER.saveAsync();
         if (persistence != null) {
             persistence.shutdown();
         }

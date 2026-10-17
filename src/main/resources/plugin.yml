@@ -40,7 +40,7 @@ commands:
 
   cleanup:
     description: Cleanup old custom image maps based on last seen date
-    usage: /<command>
+    usage: /<command> confirm
     permission: coreai.cleanup
 
 permissions:

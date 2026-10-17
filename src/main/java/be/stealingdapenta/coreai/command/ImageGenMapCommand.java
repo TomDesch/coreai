@@ -1,7 +1,6 @@
 package be.stealingdapenta.coreai.command;
 
 import static be.stealingdapenta.coreai.CoreAI.CORE_AI_LOGGER;
-import static be.stealingdapenta.coreai.config.Config.TIMEOUT_IMAGE_MS;
 import static be.stealingdapenta.coreai.map.MapImageService.MAP_IMAGE_SERVICE;
 import static be.stealingdapenta.coreai.permission.PermissionNode.IMAGE_GEN_MAP;
 import static be.stealingdapenta.coreai.util.ChatMessages.GENERATING_AI_IMAGE;
@@ -78,7 +77,7 @@ public class ImageGenMapCommand implements CommandExecutor {
         final int finalWidth = grid.columns();
         final int finalHeight = grid.rows();
         final int amount = grid.tileCount();
-        final int timeoutMs = TIMEOUT_IMAGE_MS.get();
+        final int timeoutMs = CoreAI.getInstance().getConfigSnapshot().imageTimeoutMs();
         final UUID playerId = player.getUniqueId();
         ChatMessages.send(player, GENERATING_AI_IMAGE);
 
@@ -98,11 +97,22 @@ public class ImageGenMapCommand implements CommandExecutor {
                                   || !SessionManager.SESSION_MANAGER.isCurrentAgent(playerId, agent)) {
                               return;
                           }
-                                long endTime = System.currentTimeMillis();
-                                long duration = endTime - startTime;
-                                MAP_IMAGE_SERVICE.addMapToInventory(player, finalWidth, finalHeight, tiles);
-                                ChatMessages.send(player, imageMapGeneratedFromAI(amount, duration));
-                            });
+                          long duration = System.currentTimeMillis() - startTime;
+                          MAP_IMAGE_SERVICE.createMapItems(player, finalWidth, finalHeight, tiles)
+                                  .whenComplete((items, storageError) -> CoreAI.getInstance().runMain(() -> {
+                                      if (!player.isOnline() || Bukkit.getPlayer(playerId) != player
+                                              || !SessionManager.SESSION_MANAGER.isCurrentAgent(playerId, agent)) {
+                                          return;
+                                      }
+                                      if (storageError != null) {
+                                          CORE_AI_LOGGER.warning("Could not persist AI-generated map tiles.");
+                                          ChatMessages.send(player, ChatMessages.mapCreationFailure("The map data could not be saved."));
+                                          return;
+                                      }
+                                      MAP_IMAGE_SERVICE.giveMapItems(player, items);
+                                      ChatMessages.send(player, imageMapGeneratedFromAI(amount, duration));
+                                  }));
+                      });
 
                   } catch (Exception e) {
                       CORE_AI_LOGGER.warning("Failed to generate AI image: " + e.getMessage());
