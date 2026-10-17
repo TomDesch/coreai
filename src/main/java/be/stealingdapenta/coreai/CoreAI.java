@@ -70,7 +70,7 @@ public class CoreAI extends JavaPlugin {
         validateDefaultAPIKey();
 
         apiKeyListener = new AsyncApiKeyListener();
-        modelSelectorGUI = new ModelSelectorGUI();
+        modelSelectorGUI = new ModelSelectorGUI(this);
         getServer().getPluginManager().registerEvents(apiKeyListener, this);
         getServer().getPluginManager().registerEvents(modelSelectorGUI, this);
 
@@ -178,6 +178,9 @@ public class CoreAI extends JavaPlugin {
         }
         if (apiKeyListener != null) {
             apiKeyListener.clearPendingInputs();
+        }
+        if (modelSelectorGUI != null) {
+            modelSelectorGUI.clearSessions();
         }
         if (persistenceRetryTask != null) {
             persistenceRetryTask.cancel();

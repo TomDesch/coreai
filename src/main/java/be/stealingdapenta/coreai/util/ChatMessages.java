@@ -72,6 +72,14 @@ public final class ChatMessages {
                                                                             .coreAIPrefix()
                                                                             .append("API key input exceeds the maximum allowed length.", RED)
                                                                             .build();
+    public static final Component MODEL_SAVE_FAILED = TextBuilder.TEXT_BUILDER.reset()
+                                                                               .coreAIPrefix()
+                                                                               .append("The model is active for this session but could not be saved.", RED)
+                                                                               .build();
+    public static final Component NO_MODELS_AVAILABLE = TextBuilder.TEXT_BUILDER.reset()
+                                                                                 .coreAIPrefix()
+                                                                                 .append("No models are available to select.", RED)
+                                                                                 .build();
     public static final Component FETCHING_MODELS = TextBuilder.TEXT_BUILDER.reset()
                                                                             .coreAIPrefix()
                                                                             .append("Fetching available models...", AQUA)

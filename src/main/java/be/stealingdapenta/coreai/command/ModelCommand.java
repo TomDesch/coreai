@@ -50,28 +50,32 @@ public class ModelCommand implements CommandExecutor {
 
         // Get the player's agent (includes key and stored model)
         ChatAgent agent = SessionManager.SESSION_MANAGER.getAgent(uuid);
+        UUID requestId = gui.beginRequest(player);
         String key = agent.getApiKey();
         if (key == null || key.isBlank()) {
+            gui.cancelRequest(uuid, requestId);
             ChatMessages.send(player, INVALID_API_KEY_WITH_INSTRUCTIONS);
             return true;
         }
 
         boolean accepted = CoreAI.getInstance().submitAsync(() -> {
-                  if (!SessionManager.SESSION_MANAGER.isCurrentAgent(uuid, agent)) {
+                  if (!gui.isCurrentRequest(uuid, requestId)
+                          || !SessionManager.SESSION_MANAGER.isCurrentAgent(uuid, agent)) {
                       return;
                   }
                   try {
                       List<String> models = agent.listModels();
                       CoreAI.getInstance().runMain(() -> {
-                          if (isCurrent(player, uuid, agent)) {
-                              gui.openModelGui(player, models);
+                          if (isCurrent(player, uuid, agent, requestId)) {
+                              gui.openModelGui(player, models, agent, requestId);
                           }
                       });
                   } catch (OpenAiException oae) {
                       CoreAI.getInstance().runMain(() -> {
-                          if (!isCurrent(player, uuid, agent)) {
+                          if (!isCurrent(player, uuid, agent, requestId)) {
                               return;
                           }
+                          gui.cancelRequest(uuid, requestId);
                                 if ("invalid_api_key".equals(oae.getCode())) {
                                     ChatMessages.send(player, INVALID_API_KEY_WITH_INSTRUCTIONS);
                                 } else {
@@ -81,21 +85,24 @@ public class ModelCommand implements CommandExecutor {
                       return;
                   } catch (IOException ioe) {
                       CoreAI.getInstance().runMain(() -> {
-                          if (isCurrent(player, uuid, agent)) {
+                          if (isCurrent(player, uuid, agent, requestId)) {
+                              gui.cancelRequest(uuid, requestId);
                               ChatMessages.send(player, ChatMessages.ioError(ioe));
                           }
                       });
                   }
               });
         if (!accepted) {
+            gui.cancelRequest(uuid, requestId);
             ChatMessages.send(player, BUSY);
         }
 
         return true;
     }
 
-    private boolean isCurrent(Player player, UUID uuid, ChatAgent agent) {
+    private boolean isCurrent(Player player, UUID uuid, ChatAgent agent, UUID requestId) {
         return player.isOnline() && Bukkit.getPlayer(uuid) == player
+                && gui.isCurrentRequest(uuid, requestId)
                 && SessionManager.SESSION_MANAGER.isCurrentAgent(uuid, agent);
     }
 }
